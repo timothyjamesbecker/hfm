@@ -23,7 +23,7 @@ The python library offers additional functionality via the HFM class that provid
 (7) <b>orient_out</b> = reads aligned at the position are in the outward direction (<- ->) <br>
 (8) <b>orient_um</b> = reads aligned at the position have an unmapped mate -> * or * <-<br>
 (9) <b>orient_chr</b> = reads aligned at the position have a mate that is mapped to another seq<br>
-(10) <b>clipped</b> = reads aligned at the position have either a softclip or hardclip in the CIGAR meaning that only part of the read maps<br>
+(10) <b>clipped</b> = reads aligned at the position have either a softclip or hardclip in the CIGAR<br>
 (11) <b>deletion</b> = reads aligned at the position have a deletion inside detailed by the CIGAR<br>
 (12) <b>insertion</b> = reads aligned at the position have an insertion inside detailed by the CIGAR<br>
 (13) <b>substitution</b> = reads aligned at the position have a substitution inside detailed by the CIGAR<br>
