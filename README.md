@@ -3,6 +3,22 @@ Exact Hierarchical Feature Moment/Spectrum/Transition Extraction<br>
 
 ##### Python 2.7.15+ Python PIP module or stand alone python commandline tool
 
+### INSTALLATION
+requires python 2.7.15+ (untested with python 3) and packages: numpy 1.16.0+, h5py 2.9.0+, pysam 0.15.2<br>
+core.pyx is a cython/pyrex file that when compiled will generate C code and a .so (shared object)<br>
+This is for high performance reading of the CARM/BAM/SAM input, which is the slowest section of extraction (when profiled)<br>
+The following installation will build and install the safe library into your python distribution<br>
+
+```bash
+pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.0/hfm-0.1.0.tar.gz
+```
+### DOCKER IMAGE
+alternative: download and install docker toolbox and then (avaible soon):
+```bash
+docker pull timothyjamesbecker/hfm
+sudo docker run -v /mydata:/data -it timothyjamesbecker/hfm extractor.py -h
+```
+
 #### Input Overview:
 CRAM/BAM/SAM file=> in.bam<br><br>
 Sequence Alignment Map or compressed file forms (SAM,BAM,CRAM) <br>
@@ -43,21 +59,6 @@ For each track we summarize using a base window. A base window is a starting poi
 (2) <b>spectrum</b> = a histogram (1D) of the values contained inside (works best for count tracks such as total, proper_pair, ect) but the use can supply an array of numerical boundaries to use (future work could be random-sampling estimation for auto setting this.<br>
 (3) <b>transitions</b> = a 2D array of the values that change to other values at the next position.  This can be used to find the position at which tracks are missing and also to gneral describe the shape of the singal in the tracks windows.<br>
 
-### INSTALLATION
-requires python 2.7.15+ (untested with python 3) and packages: numpy 1.16.0+, h5py 2.9.0+, pysam 0.15.2<br>
-core.pyx is a cython/pyrex file that when compiled will generate C code and a .so (shared object)<br>
-This is for high performance reading of the CARM/BAM/SAM input, which is the slowest section of extraction (when profiled)<br>
-The following installation will build and install the safe library into your python distribution<br>
-
-```bash
-pip install https:/github.com/timothyjamesbecker/hfm.tar.gz
-```
-### DOCKER IMAGE
-alternative: download and install docker toolbox and then (avaible soon):
-```bash
-docker pull timothyjamesbecker/hfm
-sudo docker run -v /mydata:/data -it timothyjamesbecker/hfm extractor.py -h
-```
 ### Python hfm module Tutorial/Examples
 read the total chr1 alignments for read group SRR622461 for file NA12878.dna.bam and generate moments, spectrum and transition features
 ```python
