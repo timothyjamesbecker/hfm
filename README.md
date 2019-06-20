@@ -1,7 +1,7 @@
 # hfm|s|t
 Exact Hierarchical Feature Moment/Spectrum/Transition Extraction<br>
 
-#####Python 2.7.15+ Python PIP module or stand alone python commandline tool
+##### Python 2.7.15+ Python PIP module or stand alone python commandline tool
 
 #### Input Overview:
 CRAM/BAM/SAM file=> in.bam<br><br>
@@ -13,7 +13,7 @@ The python library offers additional functionality via the HFM class that provid
 
 
 #### TRACKS
-#####Features over which moments, spectrum or transistions can be extracted:<br>
+##### Features over which moments, spectrum or transistions can be extracted:<br>
 (1) <b>total</b> = all reads aligned at the position<br>
 (2) <b>proper_pair</b> = reads aligned at the position with the proper pairing bit set<br>
 (3) <b>discordant</b> = reads that are not properly paired but map to the same seq<br>
