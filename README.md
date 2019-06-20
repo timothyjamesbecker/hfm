@@ -1,7 +1,7 @@
 # hfm|s|t
 Exact Hierarchical Feature Moment/Spectrum/Transition Extraction<br>
 
-##### Python 2.7.15+ Python PIP module or stand alone python commandline tool
+##### Python 2.7.15+ Python PIP module or python commandline tool
 
 ### INSTALLATION
 requires python 2.7.15+ (untested with python 3) and packages: numpy 1.16.0+, h5py 2.9.0+, pysam 0.15.2<br>
