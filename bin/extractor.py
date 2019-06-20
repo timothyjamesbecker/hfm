@@ -18,7 +18,7 @@ import glob
 import subprocess32 as subprocess
 #----------------------------
 import multiprocessing as mp
-import hfm
+from hfm import hfm
 #----------------------------
 
 des = """
