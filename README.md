@@ -6,7 +6,7 @@ Exact Hierarchical Feature Moment/Spectrum/Transition Extraction<br>
 ### INSTALLATION
 requires python 2.7.15+ (untested with python 3) and packages: numpy 1.16.0+, h5py 2.9.0+, pysam 0.15.2<br>
 core.pyx is a cython/pyrex file that when compiled will generate C code and a .so (shared object)<br>
-This is for high performance reading of the CARM/BAM/SAM input, which is the slowest section of extraction (when profiled)<br>
+This is for high performance reading of the CRAM/BAM/SAM input, which is the slowest section of extraction<br>
 The following installation will build and install the safe library into your python distribution<br>
 
 ```bash
