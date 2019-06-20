@@ -22,9 +22,10 @@ import hfm
 #----------------------------
 
 des = """
-HFM: Exact Hierarchical Feature Moment/Spectrum/Transistion Extraction for Analysis and Visualization
+HFM: Exact Hierarchical Feature Moment/Spectrum/Transition
+Extraction for Analysis and Visualization
 Batch Extractor Tool v0.1.0, Copyright (C) 2019 Timothy James Becker"""
-parser = argparse.ArgumentParser(description=des)
+parser = argparse.ArgumentParser(description=des,formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('-i', '--in_path',type=str,help='sam/bam/cram file or input directory\t[None]')
 parser.add_argument('-r', '--ref_path',type=str,help='for cram inputs\t[None]')
 parser.add_argument('-o', '--out_dir',type=str,help='output directory\t[None]')
