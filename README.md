@@ -16,7 +16,7 @@ pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.0/hf
 alternative: download and install docker toolbox and then (now avaible):
 ```bash
 docker pull timothyjamesbecker/hfm
-docker run -v /mydata:/data -it timothyjamesbecker/hfm extractor.py --test -o /data/hfm_test/ -s 1 -m False
+docker run -v /mydata:/data -it timothyjamesbecker/hfm extractor.py --test -o /data/hfm_test/ -v total -s 1 -n
 ```
 
 #### Input Overview:

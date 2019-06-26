@@ -31,7 +31,7 @@ parser.add_argument('-r', '--ref_path',type=str,help='for cram inputs\t[None]')
 parser.add_argument('-o', '--out_dir',type=str,help='output directory\t[None]')
 parser.add_argument('-p', '--cpus',type=int,help='number of parallel core||readers (pools to sequences)\t[1]')
 parser.add_argument('-c', '--comp',type=str,help='compression type\t[lzf or gzip]')
-parser.add_argument('-m', '--merge_rg',type=bool,help='merge all rg into one called "all"\t[True]')
+parser.add_argument('-n', '--no_merge_rg',action='store_true',help='do not merge all rg into one called "all"\t[False]')
 parser.add_argument('-w', '--window',type=int,help='window size in bp\t[100]')
 parser.add_argument('-b', '--branch',type=int,help='window branching factor\t[10]')
 parser.add_argument('-t', '--tile',type=bool,help='use tiles for features as opposed to 1-bp sliding windows of size w\t[True]')
@@ -64,8 +64,8 @@ else:
 
 if args.cpus is not None:     cpus = args.cpus
 else:                         cpus = 1
-if args.merge_rg is not None: merge_rg = args.merge_rg
-else:                         merge_rg = True
+if args.no_merge_rg is not None: merge_rg = False
+else:                            merge_rg = True
 if args.window is not None:   w    = args.window
 else:                         w    = 100
 if args.branch is not None:   w_b  = args.branch
@@ -93,9 +93,10 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,
                 tile=True,tree=True,comp='gzip',verbose=False):
     result = ''
     start = time.time()
+    chunk = max(window,int(1E6)/len(sms)) #targets 1E6 bp to start for single samples
     try:
         s = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
-                    window_root=int(1E9),compression=comp)
+                    window_root=int(1E9),chunk=chunk,compression=comp)
         s.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,
                       tracks=tracks,features=features,verbose=verbose)
         print('seq %s extracted, starting window updates'%seq[seq.keys()[0]])
@@ -145,6 +146,7 @@ for alignment_path in alignment_paths:
 
     t_start = time.time()
     p1 = mp.Pool(processes=cpus)
+    print('starting %s samples with merge_rg=%s\nv=%s\nf=%s\nw=%s\nb=%s\ntile=%s'%(len(sms),merge_rg,vect,feat,w,w_b,tile))
     for seq in S: #|| on seq
         p1.apply_async(process_seq,
                        args=(alignment_path,base_name,sms,seq,
