@@ -39,6 +39,7 @@ v = 'comma seperated list of vectors that will be extracted for each seq, all gi
 parser.add_argument('-v','--vectors',type=str,help=v)
 f = 'comma seperated list of features that will be calculated for each vector on each sequence, all gives every available\t[moments]'
 parser.add_argument('-f','--features',type=str,help=f)
+parser.add_argument('--test',type=bool,help='will run the multisample.bam test file and save result in the out_dir')
 args = parser.parse_args()
 
 if args.in_path is not None:
@@ -47,6 +48,9 @@ if args.in_path is not None:
     else:
         alignment_paths = glob.glob(args.in_path+'/*.sam')+glob.glob(args.in_path+'/*.bam')+glob.glob(args.in_path+'/*.cram')
     print('found files: %s'%alignment_paths)
+elif args.test:
+    print('no input was specified, but the test multisample.bam will be processed')
+    alignment_paths = [os.path.dirname(os.path.abspath(__file__)) + '/../hfm/data/multisample.bam']
 else:
     print('no input directory was specified!\n')
     raise IOError
@@ -87,7 +91,8 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,
     result = ''
     start = time.time()
     try:
-        s = hfm.HFM(tile=tile,window=window,window_branch=window_branch,window_root=int(1E9),compression=comp)
+        s = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
+                    window_root=int(1E9),compression=comp)
         s.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,
                       tracks=tracks,features=features,verbose=verbose)
         print('seq %s extracted, starting window updates'%seq[seq.keys()[0]])
