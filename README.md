@@ -1,4 +1,4 @@
-[![DOI](https://zenodo.org/badge/192426986.svg)](https://zenodo.org/badge/latestdoi/192426986)
+[![DOI](https://zenodo.org/badge/192426986.svg)](https://zenodo.org/badge/latestdoi/192426986) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 # hfm|s|t
 Exact Hierarchical Feature Moment/Spectrum/Transition Extraction<br>
 
