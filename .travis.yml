@@ -3,7 +3,6 @@ python:
   - "2.7.15"
 install:
   - sudo apt-get update
-  - sudo apt-get upgrade -y
   - pip install subprocess32
   - pip install -Iv 'Cython>=0.29.0,<0.30.0'
   - pip install -Iv 'numpy>=1.16.0,<1.17.0'
