@@ -33,7 +33,7 @@ The python library offers additional functionality via the HFM class that provid
 
 ### HFM extractor.py command line tool
 Once installation is complete, you will have access in your environment to the command line tool that will extract either single or multi SAM/BAM/CRAM files.
-```bash
+```
 extractor.py -h
 usage: extractor.py [-h] [-i IN_PATH] [-r REF_PATH] [-o OUT_DIR] [-p CPUS]
                     [-c COMP] [-n] [-w WINDOW] [-b BRANCH] [-t TILE] [-s SEQS]
