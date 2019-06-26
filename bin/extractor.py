@@ -31,6 +31,7 @@ parser.add_argument('-r', '--ref_path',type=str,help='for cram inputs\t[None]')
 parser.add_argument('-o', '--out_dir',type=str,help='output directory\t[None]')
 parser.add_argument('-p', '--cpus',type=int,help='number of parallel core||readers (pools to sequences)\t[1]')
 parser.add_argument('-c', '--comp',type=str,help='compression type\t[lzf or gzip]')
+parser.add_argument('-m','--merge_rg',type=bool,help='merge all rg into one called "all"\t[True]')
 parser.add_argument('-w', '--window',type=int,help='window size in bp\t[100]')
 parser.add_argument('-b', '--branch',type=int,help='window branching factor\t[10]')
 parser.add_argument('-t', '--tile',type=bool,help='use tiles for features as opposed to 1-bp sliding windows of size w\t[True]')
@@ -39,7 +40,7 @@ v = 'comma seperated list of vectors that will be extracted for each seq, all gi
 parser.add_argument('-v','--vectors',type=str,help=v)
 f = 'comma seperated list of features that will be calculated for each vector on each sequence, all gives every available\t[moments]'
 parser.add_argument('-f','--features',type=str,help=f)
-parser.add_argument('--test',type=bool,help='will run the multisample.bam test file and save result in the out_dir')
+parser.add_argument('--test',action='store_true',help='will run the multisample.bam test file and save result in the out_dir')
 args = parser.parse_args()
 
 if args.in_path is not None:
@@ -49,8 +50,8 @@ if args.in_path is not None:
         alignment_paths = glob.glob(args.in_path+'/*.sam')+glob.glob(args.in_path+'/*.bam')+glob.glob(args.in_path+'/*.cram')
     print('found files: %s'%alignment_paths)
 elif args.test:
-    print('no input was specified, but the test multisample.bam will be processed')
-    alignment_paths = [os.path.dirname(os.path.abspath(__file__)) + '/../hfm/data/multisample.bam']
+    print('no input was specified, but the test options were set for multisample.bam to be processed')
+    alignment_paths = [os.path.dirname(os.path.abspath(hfm.__file__)) + '/data/multisample.bam']
 else:
     print('no input directory was specified!\n')
     raise IOError
@@ -63,6 +64,8 @@ else:
 
 if args.cpus is not None:     cpus = args.cpus
 else:                         cpus = 1
+if args.merge_rg is not None: merge_rg = args.merge_rg
+else:                         merge_rg = True
 if args.window is not None:   w    = args.window
 else:                         w    = 100
 if args.branch is not None:   w_b  = args.branch
@@ -145,7 +148,7 @@ for alignment_path in alignment_paths:
     for seq in S: #|| on seq
         p1.apply_async(process_seq,
                        args=(alignment_path,base_name,sms,seq,
-                             True,vect,feat,w,w_b,tile,True,comp,True),
+                             merge_rg,vect,feat,w,w_b,tile,True,comp,True),
                        callback=collect_results)
         time.sleep(0.25)
     p1.close()
