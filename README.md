@@ -3,7 +3,7 @@ Exact Hierarchical Feature Moment/Spectrum/Transition Extraction<br>
 
 ##### Python 2.7.15+ Python PIP module or python commandline tool
 
-### INSTALLATION
+### PIP INSTALLATION AND TESTING
 requires python 2.7.15+ (untested with python 3) and packages: numpy 1.16.0+, h5py 2.9.0+, pysam 0.15.2, subproccess32 (for extractor.py usage)<br>
 core.pyx is a cython/pyrex file that when compiled will generate C code and a .so (shared object)<br>
 This is for high performance reading and statistical summary of the CRAM/BAM/SAM input, which is the slowest section of extraction<br>
@@ -11,22 +11,63 @@ The following installation will build and install the safe library into your pyt
 
 ```bash
 pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.0/hfm-0.1.0.tar.gz
+extractor.py --test -o ~/hfm_test/ -v total -s 1
+
 ```
-### DOCKER IMAGE
+### DOCKER IMAGE DOWNLOAD AND TESTING
 alternative: download and install docker toolbox and then (now avaible):
 ```bash
 docker pull timothyjamesbecker/hfm
-docker run -v /mydata:/data -it timothyjamesbecker/hfm extractor.py --test -o /data/hfm_test/ -v total -s 1 -n
+docker run -v ~/:/data -it timothyjamesbecker/hfm extractor.py --test -o /data/hfm_test/ -v total -s 1
 ```
 
 #### Input Overview:
 CRAM/BAM/SAM file=> in.bam<br><br>
-Sequence Alignment Map or compressed file forms (SAM,BAM,CRAM) <br>
+Sequence Alignment Map or compressed file forms (SAM,BAM,CRAM)<br>
+We read all SM:RG tags and map them so that multi-sample multi-read groups are in tact, they are merged by default in the extractor.py command line tool however.
 #### Output Overview:
 HDF5 file=> out.hdf5<br><br>
 HDF5 container that provides hierarchical summarized features over SAM flags and alignment properties, counts and other important attributes<br> The resultingdata store can be used on any platform and loaded into C,C++,Java,R or node.js envronments.
 The python library offers additional functionality via the HFM class that provides buffering, transformation and functionality for open data anlaysis workflows. Buffering of the avaible window levels are done in chucks and looks like a map/dictionary that provides an array payload (flat multiprocessing Array or numpy data array for machine-learning use are supported)<br>
 
+
+### HFM extractor.py command line tool
+Once installation is complete, you will have access in your environment to the command line tool that will extract either single or multi SAM/BAM/CRAM files.
+```python
+extractor.py -h
+usage: extractor.py [-h] [-i IN_PATH] [-r REF_PATH] [-o OUT_DIR] [-p CPUS]
+                    [-c COMP] [-n] [-w WINDOW] [-b BRANCH] [-t TILE] [-s SEQS]
+                    [-v VECTORS] [-f FEATURES] [--test]
+
+HFM: Exact Hierarchical Feature Moment/Spectrum/Transition
+Extraction for Analysis and Visualization
+Batch Extractor Tool v0.1.0, Copyright (C) 2019 Timothy James Becker
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -i IN_PATH, --in_path IN_PATH
+                        sam/bam/cram file or input directory	[None]
+  -r REF_PATH, --ref_path REF_PATH
+                        for cram inputs	[None]
+  -o OUT_DIR, --out_dir OUT_DIR
+                        output directory	[None]
+  -p CPUS, --cpus CPUS  number of parallel core||readers (pools to sequences)	[1]
+  -c COMP, --comp COMP  compression type	[lzf or gzip]
+  -n, --no_merge_rg     do not merge all rg into one called "all"	[False]
+  -w WINDOW, --window WINDOW
+                        window size in bp	[100]
+  -b BRANCH, --branch BRANCH
+                        window branching factor	[10]
+  -t TILE, --tile TILE  use tiles for features as opposed to 1-bp sliding windows of size w	[True]
+  -s SEQS, --seqs SEQS  comma seperated list of seqs that will be extracted, 	[all]
+  -v VECTORS, --vectors VECTORS
+                        comma seperated list of vectors that will be extracted for each seq, all gives every available	[total]
+  -f FEATURES, --features FEATURES
+                        comma seperated list of features that will be calculated for each vector on each sequence, all gives every available	[moments]
+  --test                will run the multisample.bam test file and save result in the out_dir
+
+
+```
 
 #### TRACKS
 ##### Features over which moments, spectrum or transistions can be extracted:<br>
@@ -62,14 +103,9 @@ For each track we summarize using a base window. A base window is a starting poi
 ### Python hfm module Tutorial/Examples
 read the total chr1 alignments for read group SRR622461 for file NA12878.dna.bam and generate moments, spectrum and transition features
 ```python
-import hfm
+from hfm import hfm
 s = hfm.HFM(window=100,window_branch=10,window_root=int(1E9))
 s.extract_seq('NA12878.dna.bam','NA12878',sms={'NA12878':'SRR622461'},seq={'chr1':249250621},
-              merge_rg=True,tracks=['total'],features=['all'])
+              merge_rg=True,tracks=['total'],features=['moments'])
 #reads the chr1 reads for SRR622461 read groups for file NA12878.dna.bam
-```
-
-### HFM class details
-```python
-
 ```
