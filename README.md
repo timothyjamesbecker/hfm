@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/192426986.svg)](https://zenodo.org/badge/latestdoi/192426986)
 # hfm|s|t
 Exact Hierarchical Feature Moment/Spectrum/Transition Extraction<br>
 
