@@ -4,10 +4,10 @@ python:
 install:
   - sudo apt-get update
   - pip install subprocess32
-  - pip install -Iv 'Cython>=0.29.0,<0.30.0'
-  - pip install -Iv 'numpy>=1.16.0,<1.17.0'
-  - pip install -Iv 'h5py>=2.9.0,<3.0.0'
-  - pip install -Iv 'pysam>=0.15.0,<0.16.0'
+  - pip install cython
+  - pip install numpy
+  - pip install h5py
+  - pip install pysam
   - pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.0/hfm-0.1.0.tar.gz
 script:
   - extractor.py -h
