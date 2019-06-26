@@ -8,5 +8,6 @@ install:
   - pip install -Iv 'numpy>=1.16.0,<1.17.0'
   - pip install -Iv 'h5py>=2.9.0,<3.0.0'
   - pip install -Iv 'pysam>=0.15.0,<0.16.0'
+  - pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.0/hfm-0.1.0.tar.gz
 script:
-  - python bin/extractor.py -h
+  - extractor.py -h
