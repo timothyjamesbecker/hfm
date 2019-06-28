@@ -1,10 +1,10 @@
 [![Build Status](https://api.travis-ci.org/timothyjamesbecker/hfm.svg)](https://travis-ci.com/timothyjamesbecker/hfm) ![GitHub All Releases](https://img.shields.io/github/downloads/timothyjamesbecker/hfm/total.svg) [![DOI](https://zenodo.org/badge/192426986.svg)](https://zenodo.org/badge/latestdoi/192426986) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)<br>
-![Alt text](images/logo.png?raw=true "somacx")
-## Exact Hierarchical Feature Moment/Spectrum/Transition Extraction<br>
+![Alt text](images/logo.png?raw=true "hfm")
+### A Hierarchical Feature Moment/Spectrum/Transition Framework for Analyzing and Visualizing Large Cohort Omic Data<br>
 Copyright (C) 2019 Timothy James Becker
 ##### Python 2.7.15+ Python PIP module or python commandline tool
 
-### PIP INSTALLATION AND TESTING
+#### PIP INSTALLATION AND TESTING
 requires python 2.7.15+ (untested with python 3) and packages: numpy 1.16.0+, h5py 2.9.0+, pysam 0.15.2, subproccess32 (for extractor.py usage)<br>
 core.pyx is a cython/pyrex file that when compiled will generate C code and a .so (shared object)<br>
 This is for high performance reading and statistical summary of the CRAM/BAM/SAM input, which is the slowest section of extraction<br>
@@ -15,7 +15,7 @@ pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.0/hf
 extractor.py --test -o ~/hfm_test/ -v total -s 1
 
 ```
-### DOCKER IMAGE DOWNLOAD AND TESTING
+#### DOCKER IMAGE DOWNLOAD AND TESTING
 alternative: download and install docker toolbox and then (now avaible):
 ```bash
 docker pull timothyjamesbecker/hfm
@@ -32,7 +32,7 @@ HDF5 container that provides hierarchical summarized features over SAM flags and
 The python library offers additional functionality via the HFM class that provides buffering, transformation and functionality for open data anlaysis workflows. Buffering of the avaible window levels are done in chucks and looks like a map/dictionary that provides an array payload (flat multiprocessing Array or numpy data array for machine-learning use are supported)<br>
 
 
-### HFM extractor.py command line tool
+#### HFM extractor.py command line tool
 Once installation is complete, you will have access in your environment to the command line tool that will extract either single or multi SAM/BAM/CRAM files.
 ```
 extractor.py -h
@@ -69,7 +69,7 @@ optional arguments:
 
 ```
 
-#### TRACKS
+##### TRACKS (VECTORS)
 ##### Features over which moments, spectrum or transistions can be extracted:<br>
 (1) <b>total</b> = all reads aligned at the position<br>
 (2) <b>proper_pair</b> = reads aligned at the position with the proper pairing bit set<br>
