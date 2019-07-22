@@ -13,7 +13,7 @@ cimport numpy as np
 #regular imports
 import math
 import numpy as np
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 #feature defines
 cdef unsigned int N,SUM,MIN,MAX,M1,M2,M3,M4,FN
@@ -34,17 +34,18 @@ ctypedef float tout_t;
 @cython.boundscheck(False)
 @cython.nonecheck(False)
 @cython.wraparound(False)
-def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int end, bint merge_rg=True):
-    cdef int            i,j,a,b,tid,mid,mapq,tlen,norm,read_start,read_end,gc      
+def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int end,
+                          bint merge_rg=True,int min_anchor=36, int min_clip=18):
+    cdef int            i,j,a,b,tid,mid,mapq,tlen,norm,read_start,read_end,gc,last,offset
     cdef str            t,v,rg,tag,cigar,track,sequence
     cdef list           tags
     cdef dict           C = {}
     cdef AlignmentFile  samfile
     cdef AlignedSegment read
     rg         = 'all'
-    tracks = ['primary','alternate','orient_same','orient_out',
-              'orient_um','orient_chr','clipped','deletion','insertion','substitution','fwd_rev_diff'] #zeros
-    values = ['total','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','GC']       #psuedo counts
+    tracks = ['primary','alternate','orient_same','orient_out','orient_um','orient_chr','right_anchor','left_anchor',
+              'right_clipped','left_clipped','clipped','deletion','insertion','substitution','fwd_rev_diff']   #zeros
+    values = ['total','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','GC'] #psuedo counts
     if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))} #duplicated from the safe lib
     for rg in sms:
         for t in tracks:
@@ -77,7 +78,7 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
                 C['proper_pair'][rg][a:b]  += 1.0
                 C['mapq_pp'][rg][a:b]      += mapq
                 C['tlen_pp'][rg][a:b]      += tlen
-            elif tid==mid:
+            elif tid==mid and not read.mate_is_unmapped:
                 C['discordant'][rg][a:b]   += 1.0
                 C['mapq_dis'][rg][a:b]     += mapq
                 C['tlen_dis'][rg][a:b]     += tlen                                          
@@ -91,26 +92,62 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
                 (not read.is_reverse and tlen <0)):                  C['orient_out'][rg][a:b]   += 1.0
             if read.mate_is_unmapped:                                C['orient_um'][rg][a:b]    += 1.0
             elif tid!=mid:                                           C['orient_chr'][rg][a:b]   += 1.0
-            cigar = read.cigarstring #sequence/cigard based ops-------
-            #:::TO DO::: fast way to count using cigar parser
-            if (cigar.find('S')!=-1 or cigar.find('H')!=-1):         C['clipped'][rg][a:b]      += 1.0
-            if cigar.find('D') !=-1:                                 C['deletion'][rg][a:b]     += 1.0
-            if cigar.find('I') !=-1:                                 C['insertion'][rg][a:b]    += 1.0
-            if cigar.find('X') !=-1:                                 C['substitution'][rg][a:b] += 1.0
+            cigar = read.cigarstring #sequence/cigar based ops-------
+            #cigar op counting----------------------------------------
+            last,offset,j,right_anchor,left_anchor,right_clip,left_clip = 0,0,0,False,False,False,False
+            for i in range(len(cigar)):
+                if cigar[i] == 'M' or cigar[i] == '=':
+                    j = int(cigar[last:i])
+                    left_anchor  = offset<=0 and (j-offset+1)>=min_anchor
+                    right_anchor = j>=(b-1)  and (j-offset+1)>=min_anchor
+                    last = i+1
+                    offset += j
+                elif cigar[i] == 'D':
+                    j = int(cigar[last:i])
+                    last = i+1
+                    C['deletion'][rg][a+offset:a+offset+j]     += 1.0
+                    offset += j
+                elif cigar[i] == 'I':
+                    j = int(cigar[last:i])
+                    last = i+1
+                    C['insertion'][rg][a+offset:a+offset+j]    += 1.0
+                    offset += j
+                elif cigar[i] == 'X':
+                    j = int(cigar[last:i])
+                    last = i+1
+                    C['substitution'][rg][a+offset:a+offset+j] += 1.0
+                    offset += j
+                elif cigar[i] == 'S' or cigar[i] == 'H':
+                    j = int(cigar[last:i])
+                    left_clip  = offset<=0 and (j-offset+1)>=min_clip
+                    right_clip = j>=(b-1)  and (j-offset+1)>=min_clip
+                    last = i+1
+                    C['clipped'][rg][a+offset:a+offset+j]      += 1.0
+                    offset += j
+            if not read.is_reverse:
+                if left_anchor:  C['left_anchor'][rg][a:b]   += 1.0
+                if right_anchor: C['right_anchor'][rg][a:b]  += 1.0
+                if left_clip:    C['left_clipped'][rg][a:b]  += 1.0
+                if right_clip:   C['right_clipped'][rg][a:b] += 1.0
+            else:
+                if left_anchor:  C['right_anchor'][rg][a:b]   += 1.0
+                if right_anchor: C['left_anchor'][rg][a:b]  += 1.0
+                if left_clip:    C['right_clipped'][rg][a:b]  += 1.0
+                if right_clip:   C['left_clipped'][rg][a:b] += 1.0
     samfile.close()
     if not merge_rg:
         for rg in sms:
             C['GC'][rg]       = C['GC'][rg]-1.0
-            C['mapq'][rg]     = C['mapq'][rg]-1.0
-            C['tlen'][rg]     = C['tlen'][rg]-1.0
+            C['mapq'][rg]     = C['mapq'][rg]/C['total'][rg]-1.0
+            C['tlen'][rg]     = C['tlen'][rg]/C['total'][rg]-1.0
             C['mapq_pp'][rg]  = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
             C['tlen_pp'][rg]  = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
             C['mapq_dis'][rg] = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
             C['tlen_dis'][rg] = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
     else:
         C['GC'][rg]       = C['GC'][rg]-1.0
-        C['mapq'][rg]     = C['mapq'][rg]-1.0
-        C['tlen'][rg]     = C['tlen'][rg]-1.0
+        C['mapq'][rg]     = C['mapq'][rg]/C['total'][rg]-1.0
+        C['tlen'][rg]     = C['tlen'][rg]/C['total'][rg]-1.0
         C['mapq_pp'][rg]  = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
         C['tlen_pp'][rg]  = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
         C['mapq_dis'][rg] = C['mapq_dis'][rg]/C['discordant'][rg]-1.0

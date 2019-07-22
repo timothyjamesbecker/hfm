@@ -24,7 +24,7 @@ from hfm import hfm
 des = """
 HFM: Exact Hierarchical Feature Moment/Spectrum/Transition
 Extraction for Analysis and Visualization
-Batch Extractor Tool v0.1.0, Copyright (C) 2019 Timothy James Becker"""
+Batch Extractor Tool v0.1.1, Copyright (C) 2019 Timothy James Becker"""
 parser = argparse.ArgumentParser(description=des,formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('-i', '--in_path',type=str,help='sam/bam/cram file or input directory\t[None]')
 parser.add_argument('-r', '--ref_path',type=str,help='for cram inputs\t[None]')
@@ -64,8 +64,8 @@ else:
 
 if args.cpus is not None:     cpus = args.cpus
 else:                         cpus = 1
-if args.no_merge_rg is not None: merge_rg = False
-else:                            merge_rg = True
+if args.no_merge_rg:          merge_rg = False
+else:                         merge_rg = True
 if args.window is not None:   w    = args.window
 else:                         w    = 100
 if args.branch is not None:   w_b  = args.branch
@@ -75,8 +75,8 @@ else:                         tile = True
 if args.seqs is not None:     seqs = args.seqs.split(',')
 else:                         seqs = 'all'
 if args.vectors is not None:  vect = args.vectors.split(',')
-else:                         vect = ['total','discordant','orient_out','orient_um','orient_chr',
-                                      'clipped','fwd_rev_diff','mapq','tlen','GC']
+else:                         vect = ['total','primary','discordant','orient_out','orient_same','orient_um','orient_chr','deletion','insertion',
+                                      'right_clipped','left_clipped','fwd_rev_diff','mapq_pp','mapq_dis','tlen_pp','tlen_dis','GC']
 if args.features is not None: feat = args.features.split(',')
 else:                         feat = ['moments']
 if args.comp is not None: comp     = args.comp
@@ -146,7 +146,9 @@ for alignment_path in alignment_paths:
 
     t_start = time.time()
     p1 = mp.Pool(processes=cpus)
-    print('starting %s samples with merge_rg=%s\nv=%s\nf=%s\nw=%s\nb=%s\ntile=%s'%(len(sms),merge_rg,vect,feat,w,w_b,tile))
+    print('determined the following rgs: %s'%sms)
+    print('starting %s samples with %s total rgs and merge_rg=%s\nv=%s\nf=%s\nw=%s\nb=%s\ntile=%s'%\
+          (len(set(sms.values())),len(sms),merge_rg,vect,feat,w,w_b,tile))
     for seq in S: #|| on seq
         p1.apply_async(process_seq,
                        args=(alignment_path,base_name,sms,seq,
