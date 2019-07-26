@@ -157,12 +157,13 @@ for alignment_path in alignment_paths:
         time.sleep(0.25)
     p1.close()
     p1.join()
-    hfm.merge_seqs(hdf5_path+'/seqs/',hdf5_out) #merge the files
-    print(subprocess.check_output(['rm','-rf',hdf5_path+'/seqs/'])) #delete the seperate files
-    t_stop = time.time()
-    print('sample %s || cython with %s cpus in %s sec'%(base_name,cpus,t_stop-t_start))
-    #executiong of SAFE Test Pipeline for a sample:::::::::::::::::::::::::::::::::::::::
-    if not all([l['result']=='' for l in result_list]):
+    if all([l['result']=='' for l in result_list]) and len(glob.glob(hdf5_path + '/seqs/*.hdf5')) >= len(S):
+        hfm.merge_seqs(hdf5_path+'/seqs/',hdf5_out) #merge the files
+        print(subprocess.check_output(['rm','-rf',hdf5_path+'/seqs/'])) #delete the seperate files
+    else:
         s = ''
         for l in result_list: s += l['result']
-        with open(hdf5_path+'error','w') as f: f.write(s)
+        with open(hdf5_path + 'error', 'w') as f: f.write(s)
+    t_stop = time.time()
+    print('sample %s || cython with %s cpus in %s sec'%(base_name,cpus,t_stop-t_start))
+
