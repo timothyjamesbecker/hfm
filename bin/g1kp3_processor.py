@@ -200,7 +200,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample %s stage %s: %s'%(sample,stage,err)
+            return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
         #------------------------------------------------------
     if last_id==1: # [2] parse all of the finished file names, RG tags are in the RG structure
         stage,output,err = last_id+1,'',''
@@ -239,7 +239,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample %s stage %s: %s'%(sample,stage,err)
+            return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
         #------------------------------------------------------
     if last_id==2: # [3] need to coordinate sort the seperate read now
         stage,output,err = last_id+1,'',''
@@ -258,7 +258,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample %s stage %s: %s'%(sample,stage,err)
+            return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
         #------------------------------------------------------
     if last_id==3: #[4] merge bam files
         stage,output,err = last_id+1,'',''
@@ -284,7 +284,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample %s stage %s: %s'%(sample,stage,err)
+            return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
     if last_id==4: # [5] mark duplicates
         stage,output,err = last_id+1,'',''
         write_log_status(log_status,stage,0)
@@ -301,7 +301,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample %s stage %s: %s'%(sample,stage,err)
+            return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
     if last_id==5: # [6] run hfm on the final BAM file
         stage,output,err = last_id+1,'',''
         write_log_status(log_status,stage,0)
@@ -323,7 +323,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample %s stage %s: %s'%(sample,stage,err)
+            return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
     if last_id==6: # [7] sync the data to larger disk if needed
         stage,output,err = last_id+1,'',''
         write_log_status(log_status,stage,0)
@@ -342,7 +342,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample %s stage %s: %s'%(sample,stage,err)
+            return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
     if last_id==7: # [8] clean up local disks if needed then shutdown
         stage,output,err = last_id+1,'',''
         write_log_status(log_status,stage,0)
@@ -358,7 +358,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample %s stage %s: %s'%(sample,stage,err)
+            return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
     if last_id==8: #log the final terminal stage
         write_log_status(log_status,100,0)
         write_log_status(log_status,100,1)
