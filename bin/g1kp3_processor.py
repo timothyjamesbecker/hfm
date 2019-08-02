@@ -222,7 +222,9 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             for r in RG[sample]:
                 if r.find(idx)>-1: rg = r
             print("starting minimap2 alignment of read group = '%s'"%rg.replace('\t','\\t'))
-            if rg!='':
+            check_bam = glob.glob('%s/%s_%s.bam'%(sample_dir,sample,idx))
+            print('checking for output rg file = %s'%(len(check_bam)>0))
+            if rg!='' and len(check_bam)<1:
                 command = [software+'minimap2','-ax','sr','-Y','-t %s'%threads,'-R',"'%s'"%rg.replace('\t','\\t'),ref_mmi,fqs[idx]['1'],fqs[idx]['2'],'|',
                            software+'samtools','view','-','-Sbh','>','%s/%s_%s.bam'%(sample_dir,sample,idx)]
                 try:
