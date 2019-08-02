@@ -234,7 +234,8 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             else:
                 err += ' '.join(command) + '\n'
         #------------------------------------------------------
-        if err=='' and len(glob.glob(sample_dir+'/'+'%s_*.bam'%sample))>=len(RG[sample]): #at least
+        bam_len = len(glob.glob(sample_dir+'/'+'%s_*.bam'%sample))
+        if err=='' and bam_len>=len(RG[sample]): #at least all passed
             write_log_status(log_status,stage,1)
             last_id+=1 #continue
         else:
