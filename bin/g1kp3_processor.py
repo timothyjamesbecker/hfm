@@ -231,7 +231,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
                     output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
                     print("finished minimap2 alignemnt of read group = '%s'"%rg)
                 except Exception as E:
-                    err += ' '.join(command)+'\n'+str(E)+'\n'
+                    err += 'err '+' '.join(command)+' E '+str(E)+'\n'
                     pass
             else:
                 err += 'rg was null or bam was present'+' '.join(command) + '\n'
