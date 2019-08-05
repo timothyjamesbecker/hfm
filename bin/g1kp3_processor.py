@@ -234,7 +234,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
                     err += ' '.join(command)+'\n'+str(E)+'\n'
                     pass
             else:
-                err += ' '.join(command) + '\n'
+                err += 'rg was null or bam was present'+' '.join(command) + '\n'
         #------------------------------------------------------
         bam_len = len(glob.glob(sample_dir+'/'+'%s_*.bam'%sample))
         if err=='' and bam_len>=len(RG[sample]): #at least all passed
@@ -242,7 +242,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample %s stage %s: %s :%s :%s'%(sample,stage,err,output,RG[sample])
+            return 'error on sample %s stage %s: err %s : out %s : RG %s'%(sample,stage,err,output,RG[sample])
         #------------------------------------------------------
     if last_id==2: # [3] need to coordinate sort the seperate read now
         stage,output,err = last_id+1,'',''
