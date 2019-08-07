@@ -262,7 +262,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             except Exception:
                 err += ' '.join(command) + '\n'
                 pass
-        if err=='' and len(glob.glob(sample_dir+'/%s_*.sorted.bam'%sample))>=len(RG[sample]): #at least
+        if len(glob.glob(sample_dir+'/%s_*.sorted.bam'%sample))>=len(RG[sample]): #at least
             write_log_status(log_status,stage,1)
             last_id+=1 #continue
         else:
