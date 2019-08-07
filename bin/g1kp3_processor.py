@@ -243,7 +243,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
         print('completed checks for minmap2 for sample: %s'%sample)
         #------------------------------------------------------
         bam_len = len(glob.glob(sample_dir+'/'+'%s_*.bam'%sample))
-        if err=='' and bam_len>=len(RG[sample]): #at least all passed
+        if bam_len>=len(RG[sample]): #at least all passed
             write_log_status(log_status,stage,1)
             last_id+=1 #continue
         else:
@@ -262,7 +262,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             except Exception:
                 err += ' '.join(command) + '\n'
                 pass
-        if len(glob.glob(sample_dir+'/%s_*.sorted.bam'%sample))>=len(RG[sample]): #at least
+        if err=='' and len(glob.glob(sample_dir+'/%s_*.sorted.bam'%sample))>=len(RG[sample]): #at least
             write_log_status(log_status,stage,1)
             last_id+=1 #continue
         else:
