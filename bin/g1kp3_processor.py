@@ -238,16 +238,24 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
                     pass
             else:
                 if rg=='': err += 'sample: %s rg was null'%sample
-                if len(check_bam)>0: err += 'sample: %s rg: %s was found on disk'%(sample,rg)
+                if len(check_bam)>0: err += 'sample: %s rg: %s was found on disk\n'%(sample,rg)
         print('completed checks for minmap2 for sample: %s'%sample)
         #------------------------------------------------------
-        bam_len = len(glob.glob(sample_dir+'/'+'%s_*.bam'%sample))
-        if bam_len>=len(RG[sample]): #at least all passed
+        finished_bams = glob.glob(sample_dir+'/'+'%s_*.bam'%sample)
+        missing_bams = []
+        #locate the missing RG[sample] in the bams...?
+        for rg in RG[sample]:
+            r = rg.split('ID:')[-1].split('\t')[0]
+            if not any([bams.find(r)>0 for bams in finished_bams]):
+                missing_bams += [r]
+        # locate the missing RG[sample] in the bams...?
+        if len(finished_bams)>=len(RG[sample]): #at least all passed
             write_log_status(log_status,stage,1)
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample: %s\nstage: %s\nerr: %s\nout: %s\nRG %s'%(sample,stage,err,output,RG[sample])
+            return 'error on sample: %s\tstage: %s\tRGs: %s/%s missing=%s\nerr: %s\nout:%s'%\
+                   (sample,stage,len(RG[sample]),len(finished_bams),missing_bams,err,output)
         #------------------------------------------------------
     if last_id==2: # [3] need to coordinate sort the seperate read now
         stage,output,err = last_id+1,'',''
