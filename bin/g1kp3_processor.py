@@ -237,9 +237,8 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
                     err += 'err '+' '.join(command)+' E '+str(E)+'\n'
                     pass
             else:
-                if rg=='': print('sample: %s rg was null')
-                if len(check_bam)>0: print('sample: %s rg: %s was found on disk'%(sample,rg))
-                err += 'sample: %s rg was null or rg was found on disk'%(sample)
+                if rg=='': err += 'sample: %s rg was null'%sample
+                if len(check_bam)>0: err += 'sample: %s rg: %s was found on disk'%(sample,rg)
         print('completed checks for minmap2 for sample: %s'%sample)
         #------------------------------------------------------
         bam_len = len(glob.glob(sample_dir+'/'+'%s_*.bam'%sample))
