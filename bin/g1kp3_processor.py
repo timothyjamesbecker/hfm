@@ -217,24 +217,28 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
         if len(fqs)<1: err += 'error occured with files %s\nprocessed as %s'%(fastqs,fqs)
 
         #now we have figured out which files we have and can further process via minimap2 pipeline
+        print('starting minimap2 checks for sample: %s'%sample)
         for idx in fqs:
             rg = ''
             for r in RG[sample]:
                 if r.find(idx)>-1: rg = r
-            print("starting minimap2 alignment of read group = '%s'"%rg.replace('\t','\\t'))
+            print("checking minimap2 alignment of read group = '%s'"%rg.replace('\t','\\t'))
             check_bam = glob.glob('%s/%s_%s.bam'%(sample_dir,sample,idx))
-            print('checking for output rg file = %s'%(len(check_bam)>0))
+            print('found minimap2 alignment of read group = %s'%(len(check_bam)>0))
             if rg!='' and len(check_bam)<1:
+                print("starting new minimap2 alignment for read group = '%s'"%rg.replace('\t','\\t'))
                 command = [software+'minimap2','-ax','sr','-Y','-t %s'%threads,'-R',"'%s'"%rg.replace('\t','\\t'),ref_mmi,fqs[idx]['1'],fqs[idx]['2'],'|',
                            software+'samtools','view','-','-Sbh','>','%s/%s_%s.bam'%(sample_dir,sample,idx)]
                 try:
                     output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
                     print("finished minimap2 alignemnt of read group = '%s'"%rg)
                 except Exception as E:
+                    print("minimap2 alignemnt failed for read group = '%s'"%rg)
                     err += 'err '+' '.join(command)+' E '+str(E)+'\n'
                     pass
             else:
                 err += 'rg was null or bam was present'+' '.join(command) + '\n'
+        print('completed checks for minmap2 for sample: %s'%sample)
         #------------------------------------------------------
         bam_len = len(glob.glob(sample_dir+'/'+'%s_*.bam'%sample))
         if err=='' and bam_len>=len(RG[sample]): #at least all passed
@@ -242,7 +246,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             last_id+=1 #continue
         else:
             write_log_status(log_status,stage,-1)
-            return 'error on sample %s stage %s: err %s : out %s : RG %s'%(sample,stage,err,output,RG[sample])
+            return 'error on sample: %s\nstage: %s\nerr: %s\nout: %s\nRG %s'%(sample,stage,err,output,RG[sample])
         #------------------------------------------------------
     if last_id==2: # [3] need to coordinate sort the seperate read now
         stage,output,err = last_id+1,'',''
