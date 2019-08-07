@@ -255,7 +255,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
         else:
             write_log_status(log_status,stage,-1)
             return 'error on sample: %s\tstage: %s\tRGs: %s/%s missing=%s\nerr: %s\nout:%s'%\
-                   (sample,stage,len(RG[sample]),len(finished_bams),missing_bams,err,output)
+                   (sample,stage,len(finished_bams),len(RG[sample]),missing_bams,err,output)
         #------------------------------------------------------
     if last_id==2: # [3] need to coordinate sort the seperate read now
         stage,output,err = last_id+1,'',''
