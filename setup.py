@@ -15,8 +15,7 @@ except ImportError:
     raise Exception('pysam not found; please install pysam first')
 from distutils.version import StrictVersion
 required_pysam_version = '0.15.2'
-if StrictVersion(two_dot(pysam.__version__)) < StrictVersion(required_pysam_version) or\
-   StrictVersion(two_dot(pysam.__version__)) > StrictVersion(required_pysam_version):
+if StrictVersion(two_dot(pysam.__version__)) < StrictVersion(required_pysam_version):
    raise Exception('pysam version == %s is required; found %s' %
                     (required_pysam_version, pysam.__version__))
 # require numpy is pre-installed
