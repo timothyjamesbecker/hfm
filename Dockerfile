@@ -28,4 +28,4 @@ RUN pip install -Iv 'Cython>=0.29.0,<0.30.0'
 RUN pip install -Iv 'numpy>=1.16.0,<1.17.0'
 RUN pip install -Iv 'h5py>=2.9.0,<3.0.0'
 RUN pip install -Iv 'pysam>=0.15.0,<0.16.0'
-RUN pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.0/hfm-0.1.0.tar.gz
+RUN pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.1/hfm-0.1.1.tar.gz
