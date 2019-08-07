@@ -11,7 +11,7 @@ This is for high performance reading and statistical summary of the CRAM/BAM/SAM
 The following installation will build and install the hfm library into your python distribution<br>
 
 ```bash
-pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.0/hfm-0.1.0.tar.gz
+pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.1/hfm-0.1.1.tar.gz
 extractor.py --test -o ~/hfm_test/ -v total -s 1
 
 ```
