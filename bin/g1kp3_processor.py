@@ -241,15 +241,16 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
                 if len(check_bam)>0: err += 'sample: %s rg: %s was found on disk\n'%(sample,rg)
         print('completed checks for minmap2 for sample: %s'%sample)
         #------------------------------------------------------
-        finished_bams = glob.glob(sample_dir+'/'+'%s_*.bam'%sample)
+        finished_bams  = glob.glob(sample_dir+'/'+'%s_*.bam'%sample)
+        finished_fastq = sorted(glob.glob(sample_dir+'/'+'%s_1.filt.fastq.gz')+glob.glob(sample_dir+'/'+'%s_1.filt.fastq.gz'))
         missing_bams = []
         #locate the missing RG[sample] in the bams...?
-        for rg in RG[sample]:
-            r = rg.split('ID:')[-1].split('\t')[0]
+        for fastq in finished_fastq:
+            r = fastq.rsplit('/')[-1].rsplit('_')[0]
             if not any([bams.find(r)>0 for bams in finished_bams]):
                 missing_bams += [r]
         # locate the missing RG[sample] in the bams...?
-        if len(finished_bams)>=len(RG[sample]): #at least all passed
+        if len(finished_bams)>=len(finished_fastq): #at least all passed
             write_log_status(log_status,stage,1)
             last_id+=1 #continue
         else:
