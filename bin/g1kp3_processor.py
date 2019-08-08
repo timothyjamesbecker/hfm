@@ -242,7 +242,8 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
         print('completed checks for minmap2 for sample: %s'%sample)
         #------------------------------------------------------
         finished_bams  = glob.glob(sample_dir+'/'+'%s_*.bam'%sample)
-        finished_fastq = sorted(glob.glob(sample_dir+'/'+'%s_1.filt.fastq.gz')+glob.glob(sample_dir+'/'+'%s_1.filt.fastq.gz'))
+        finished_fastq = sorted(glob.glob(sample_dir+'/'+'*_1.filt.fastq.gz')+\
+                                glob.glob(sample_dir+'/'+'*_2.filt.fastq.gz'))
         missing_bams = []
         #locate the missing RG[sample] in the bams...?
         for fastq in finished_fastq:
