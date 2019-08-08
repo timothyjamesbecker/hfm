@@ -250,7 +250,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
             if not any([bams.find(r)>0 for bams in finished_bams]):
                 missing_bams += [r]
         # locate the missing RG[sample] in the bams...?
-        if len(finished_bams)>=len(finished_fastq): #at least all passed
+        if len(finished_bams)>=len(finished_fastq)/2: #at least all passed
             write_log_status(log_status,stage,1)
             last_id+=1 #continue
         else:
