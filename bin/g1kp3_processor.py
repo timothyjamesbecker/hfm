@@ -468,7 +468,7 @@ if __name__ == '__main__':
         pick_list = list(np.random.choice(list(set([y for k in P for y in P[k]])), num_samples, replace=False))
     else:                 #select the highest coverage samples using the bas RG data
         print('using highest %sth coverage bas for sample selection'%num_samples)
-        pick_list = sorted(C,key=lambda x: C[x])[::-1][offset:num_samples] #side effect of downloading larger first
+        pick_list = sorted(C,key=lambda x: C[x])[::-1][offset:(offset+num_samples)] #side effect of downloading larger first
     # start || wget calls
     p1 = mp.Pool(processes=cpus)
     for sample in pick_list:  # for each sample download both mapped and unmapped patterns
