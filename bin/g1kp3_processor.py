@@ -19,6 +19,7 @@ parser.add_argument('--target_dir', type=str, help='target directory for final h
 parser.add_argument('-r', '--reference', type=str, help='reference fasta file\t[None]')
 parser.add_argument('-s', '--seqs', type=str, help='comma seperated list of seqs to process in hfm\t[ALL]')
 parser.add_argument('-p','--select_by_pop',action='store_true',help='select from 26 pop types versus the max coverage\t[False]')
+parser.add_argument('--select_offset',type=int,help='add this offset for selecting the samples\t[0]')
 parser.add_argument('-b', '--branch', type=int, help='hfm window branching factor\t[10]')
 parser.add_argument('-w', '--window', type=int, help='hfm summary window size in bp\t[100]')
 parser.add_argument('--no_merge_rg', action='store_true', help='do not merge the rg during hfm generation\t[False]')
@@ -74,6 +75,10 @@ if args.branch is not None:
     branch = args.branch
 else:
     branch = 10
+if args.select_offset is not None:
+    offset = args.select_offset
+else:
+    offset = 0
 if args.no_merge_rg:
     merge_rg = False
 else:
@@ -463,7 +468,7 @@ if __name__ == '__main__':
         pick_list = list(np.random.choice(list(set([y for k in P for y in P[k]])), num_samples, replace=False))
     else:                 #select the highest coverage samples using the bas RG data
         print('using highest %sth coverage bas for sample selection'%num_samples)
-        pick_list = sorted(C,key=lambda x: C[x])[::-1][:num_samples] #side effect of downloading larger first
+        pick_list = sorted(C,key=lambda x: C[x])[::-1][offset:num_samples] #side effect of downloading larger first
     # start || wget calls
     p1 = mp.Pool(processes=cpus)
     for sample in pick_list:  # for each sample download both mapped and unmapped patterns
