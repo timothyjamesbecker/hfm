@@ -83,8 +83,8 @@ optional arguments:
 (8) <b>orient_um</b> = reads aligned at the position have an unmapped mate -> * or * <-<br>
 (9) <b>orient_chr</b> = reads aligned at the position have a mate that is mapped to another seq<br>
 (10) <b>clipped</b> = reads aligned at the position have either a softclip or hardclip in the CIGAR<br>
-(11) <b>clipped</b> = reads aligned at the position have either a left softclip or hardclip in the CIGAR<br>
-(12) <b>clipped</b> = reads aligned at the position have either a right softclip or hardclip in the CIGAR<br>
+(11) <b>left clipped</b> = reads aligned at the position have either a left softclip or hardclip in the CIGAR<br>
+(12) <b>right clipped</b> = reads aligned at the position have either a right softclip or hardclip in the CIGAR<br>
 (13) <b>deletion</b> = reads aligned at the position have a deletion inside detailed by the CIGAR<br>
 (14) <b>insertion</b> = reads aligned at the position have an insertion inside detailed by the CIGAR<br>
 (15) <b>substitution</b> = reads aligned at the position have a substitution inside detailed by the CIGAR<br>
