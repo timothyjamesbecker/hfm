@@ -23,7 +23,7 @@ import core
 #mapping the name and size of each sequence that will be passed to the extractor
 #common workflows are to remove the sequences or match to the sequences that are desired
 #before passing into a feature extraction runner
-def get_seq(alignment_path,sort_by_largest=True):
+def get_sam_seq(alignment_path, sort_by_largest=True):
     am = pysam.AlignmentFile(alignment_path,'rb')
     seqs = {s['SN']:s['LN'] for s in am.header['SQ']}
     am.close()
@@ -31,7 +31,7 @@ def get_seq(alignment_path,sort_by_largest=True):
 
 #given an alignment file, SAM, BAM,CRAM reads the sequences and creates a dict mapping:
 #{sample_name:[rg1_name,rg2_name,...rgx_name}
-def get_rg(alignment_path):
+def get_sam_rg(alignment_path):
     rg = {}
     am = pysam.AlignmentFile(alignment_path,'rb')
     #need to assemble all the read groups in a file here
@@ -46,7 +46,7 @@ def get_rg(alignment_path):
     
 #given an alignment file, SAM, BAM,CRAM reads the sequences and creates a dict mapping:
 #{rg1_name:sample_id}
-def get_sm(alignment_path):
+def get_sam_sm(alignment_path):
     sm = {}
     am = pysam.AlignmentFile(alignment_path,'rb')
     if 'RG' in am.header:
@@ -111,7 +111,7 @@ def merge_samples(hdf5_dir,hdf5_out):
 #add some metadata information abut the type of data: WGS, WES, RNA-seq, CHIAPET, etc... 
 class HFM:
     def __init__(self,window=int(1E2),window_branch=0,window_root=0,chunk=int(1E6),max_depth=int(1E4),
-                 bins=None,tile=True,fast=True,linear=False,compression='lzf',ratio=9):
+                 bins=None,tile=True,fast=True,linear=False,compression='gzip',ratio=9):
         self.__max_depth__     = np.uint32(max_depth)     #saturate counts after this value
         self.__window__        = np.uint32(window)        #base window size
         self.__window_branch__ = np.uint32(window_branch) #branch factor each level
@@ -124,6 +124,7 @@ class HFM:
         self.O  = None                            #the output shared memory buffer
         self.ap = None                            #pysam alignment path
         self.f  = None                            #hdf5 file pointer
+        self.g  = None                            #secondary hdf5 file pointer if needed
         self.__restart__ = 4                      #restart divisor of window if using fast algo
         self.__compression__ = compression        #can use lzf for fast float or gzip here
         self.__ratio__ = ratio                    #comp ratio 1-9
@@ -183,6 +184,7 @@ class HFM:
         data.attrs['bins']          = self.__bins__
         data.attrs['max_depth']     = self.__max_depth__
         data.attrs['buffer']        = self.__buffer__
+        #data.attrs['pos']           = self.__pos__
 
     #store the sms information too?
     def read_attrs(self,data):
@@ -209,8 +211,64 @@ class HFM:
         self.__bins__           = data.attrs['bins']
         self.__max_depth__      = data.attrs['max_depth']
         self.__buffer__         = data.attrs['buffer']
+        #self.__pos__            = data.attrs['pos']
         self.B = mp.Array(ctypes.c_float,self.__bins__,lock=False)
-  
+
+    def set_attributes(self,dict):
+        self.__N__              = dict['N']
+        self.__SUM__            = dict['SUM']
+        self.__MIN__            = dict['MIN']
+        self.__MAX__            = dict['MAX']
+        self.__M1__             = dict['M1']
+        self.__M2__             = dict['M2']
+        self.__M3__             = dict['M3']
+        self.__M4__             = dict['M4']
+        self.__MN__             = dict['MN']
+        self.__SN__             = dict['SN']
+        self.__TN__             = dict['TN']
+        self.__seq__            = dict['seq']
+        self.__len__            = dict['len']
+        self.__fast__           = dict['fast']
+        self.__linear__         = dict['linear']
+        self.__tile__           = dict['tile']
+        self.__window__         = dict['window']
+        self.__window_branch__  = dict['window_branch']
+        self.__window_root__    = dict['window_root']
+        self.__moments__        = dict['moments']
+        self.__bins__           = dict['bins']
+        self.__max_depth__      = dict['max_depth']
+        self.__buffer__         = dict['buffer']
+        #self.__pos__            = data.attrs['pos']
+        self.B = mp.Array(ctypes.c_float,self.__bins__,lock=False)
+
+    def get_attributes(self):
+        dict = {}
+        dict['N']             = self.__N__
+        dict['SUM']           = self.__SUM__
+        dict['MIN']           = self.__MIN__
+        dict['MAX']           = self.__MAX__
+        dict['M1']            = self.__M1__
+        dict['M2']            = self.__M2__
+        dict['M3']            = self.__M3__
+        dict['M4']            = self.__M4__
+        dict['MN']            = self.__MN__
+        dict['SN']            = self.__SN__
+        dict['TN']            = self.__TN__
+        dict['seq']           = self.__seq__
+        dict['len']           = self.__len__
+        dict['fast']          = self.__fast__
+        dict['linear']        = self.__linear__
+        dict['tile']          = self.__tile__
+        dict['window']        = self.__window__
+        dict['window_branch'] = self.__window_branch__
+        dict['window_root']   = self.__window_root__
+        dict['moments']       = self.__moments__
+        dict['bins']          = self.__bins__
+        dict['max_depth']     = self.__max_depth__
+        dict['buffer']        = self.__buffer__
+        # data.attrs['pos']   = self.__pos__
+        return dict
+
     #given an integer range pull the corresponding tiles
     #because disjoint tiles will partially overlap, this
     #can return tiles before and after the range selected
@@ -520,7 +578,7 @@ class HFM:
                                             if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t updating moments for %sbp to %sbp...'%(sm,rg,seq[k],track,w,w*b))
                                             w *= b
                                             l = int(l/b+(1 if l%b>0 else 0)) #update the new number of windows to use and window size
-                                            core.merge_tiled_moments_target(self.I,self.O,np.b,disjoint=True)
+                                            core.merge_tiled_moments_target(self.I,self.O,b,disjoint=True)
                                             if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t completed %sbp to %sbp updates'%(sm,rg,seq[k],track,w,w*b))
                                             if self.__compression__=='gzip':
                                                 if verbose: print('trying to create a new group for window %s'%w)
@@ -533,6 +591,8 @@ class HFM:
                                                                              (l*self.__MN__,),dtype='f8',
                                                                              compression=self.__compression__,shuffle=True)
                                             data[:] = np.reshape(self.O[:],(l,self.__MN__))[:]                  # write it to hdf5
+                                            self.__window__ = w                                                 # update window size
+                                            self.write_attrs(data)                                         # save attributes
                                             #reset data arrays---------------------------------------------------------------------------
                                             self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
                                             self.I[:]  = self.O[:]                                              #copy back the last answer
@@ -560,11 +620,301 @@ class HFM:
                                                                              (l,self.__MN__,),dtype='f8',
                                                                              compression=self.__compression__,shuffle=True)
                                             data[:] = np.reshape(self.O[:],(l,self.__MN__))[:]                  # write it to hdf5
+                                            self.__window__ = w                                                 # update window size
+                                            self.write_attrs(data)                                         # save attributes
                                             #reset data arrays---------------------------------------------------------------------------
                                             self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
                                             self.I[:]  = self.O[:]                                              #copy back the last answer
                                             self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False) #reset output
+                            if 'spectrum' in self.f[sm][rg][seq[k]][track]:
+                                print('spectrum updates not implemented in HFM yet...')
+                            if 'transitions' in self.f[sm][rg][seq[k]][track]:
+                                print('transition updates not implemented in HFM yet...')
             self.f.close()
+        return True
+
+    #given an arbitrary hfm file, get and return the base attributes (IE the smallest windows)
+    #we assume that the attributes for the base window summaries are uniform across the dimensions
+    def get_base_window_attributes(self,hdf5_path):
+        A = None
+        if os.path.exists(hdf5_path):
+            f = File(hdf5_path,'r')
+            if len(f.keys())>0:
+                sm = f.keys()[0]
+                if len(f[sm].keys())>0:
+                    rg = f[sm].keys()[0]
+                    if len(f[sm][rg].keys())>0:
+                        seq = f[sm][rg].keys()[0]
+                        if len(f[sm][rg][seq].keys())>0:
+                            trk = f[sm][rg][seq].keys()[0]
+                            if len(f[sm][rg][seq][trk].keys())>0:
+                                ftr = f[sm][rg][seq][trk].keys()[0]
+                                if len(f[sm][rg][seq][trk][ftr].keys()[0])>0:
+                                    w = sorted([int(x) for x in f[sm][rg][seq][trk][ftr].keys()])[0]
+                                    A = {x[0]:x[1] for x in f[sm][rg][seq][trk][ftr][str(w)].attrs.iteritems()}
+            f.close()
+        return A
+
+    #given an arbitrary hfm file, get and return a seqname:seqlength dictionary
+    def get_seqs(self,hdf5_path):
+        seqs = {}
+        if os.path.exists(hdf5_path):
+            f = File(hdf5_path,'r')
+            for sm in f:
+                for rg in f[sm]:
+                    for seq in f[sm][rg]:
+                        seqs[str(seq)] = 0
+                        for trk in f[sm][rg][seq]:
+                            for ftr in f[sm][rg][seq][trk]:
+                                w = sorted([int(x) for x in f[sm][rg][seq][trk][ftr].keys()])[0]
+                                l = f[sm][rg][seq][trk][ftr][str(w)].attrs['len']
+                                seqs[seq] = l
+                                break
+                            if seqs[seq]>0: break
+            f.close()
+        return seqs
+
+    #we assume that the SAFE object has establish the base windows via extract_seq and that
+    #the user may or may not have then used update_seq_tree to merge together wind_branch disjoint adjacent windows
+    #we build a new hdf5 file by copying the base windows and then perform the update operations based on
+    #the new given branch factor used when the HFM object was initialized in the form: sms/rgs/seqs/trks/frs/ws
+    def rebranch_update_tree(self,hdf5_in_path,hdf5_out_path,window_branch=10,verbose=False):
+        if os.path.exists(hdf5_in_path):
+            base = self.get_base_window_attributes(hdf5_in_path) #get the base window attributes
+            base['window_branch'] = window_branch                #this is the new branching factor update value
+            seqs = self.get_seqs(hdf5_in_path)                   #gets the seqname:seqlength dict
+            self.f = File(hdf5_in_path,'r')                      #opens the input hfm file
+            self.g = File(hdf5_out_path,'a')                     #opens now in write mode
+            self.set_attributes(base)                            #sets the object to have base window attributes of the file
+            for seq in seqs:
+                w,b,r = np.uint64(self.__window__),np.uint32(self.__window_branch__),min(np.uint64(self.__window_root__),np.uint64(seqs[seq]))
+                if b>=2 and w*b<=r:
+                    for sm in self.f:                                           #one sample
+                        if verbose: print('updating windows for sample %s'%sm)
+                        for rg in self.f[sm]:                                   #multiple read groups
+                            if verbose: print('updating windows for read group %s'%rg)
+                            if seq in self.f[sm][rg]:
+                                for trk in self.f[sm][rg][seq]:               #multiple tracks
+                                    if verbose: print('updating windows for track %s'%trk)
+                                    if 'moments' in self.f[sm][rg][seq][trk]: #should have one windows size to start
+                                        if self.__tile__:
+                                            if self.__linear__:
+                                                w,b = np.uint64(self.__window__),np.uint32(self.__window_branch__)
+                                                in_data = self.f[sm][rg][seq][trk]['moments'][str(w)] #read from hdf5 once
+                                                l = len(in_data)
+                                                #------------------------------------------------------------------------------
+                                                if self.__compression__=='gzip':
+                                                    if verbose: print('trying to create a new group for window %s'%w)
+                                                    data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                 (l*self.__MN__,),dtype='f8',
+                                                                                 compression=self.__compression__,
+                                                                                 compression_opts=self.__ratio__,shuffle=True)
+                                                else:
+                                                    if verbose: print('trying to create a new group for window %s'%w)
+                                                    data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                 (l*self.__MN__,),dtype='f8',
+                                                                                 compression=self.__compression__,shuffle=True)
+                                                data[:] = in_data[:]   #copy all the data from one hfm to the other?
+                                                self.write_attrs(data) #save attributes------------------------
+                                                #------------------------------------------------------------------------------
+                                                self.I    = mp.Array(ctypes.c_double,self.__MN__*l,lock=False) #set sratch
+                                                self.I[:] = data[:] #don't have to reshape to 1D array for linear
+                                                self.O    = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False)
+                                                while w*b<=r:
+                                                    if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t updating moments for %sbp to %sbp...'%(sm,rg,seq,trk,w,w*b))
+                                                    w *= b
+                                                    l = int(l/b+(1 if l%b>0 else 0)) #update the new number of windows to use and window size
+                                                    core.merge_tiled_moments_target(self.I,self.O,b,disjoint=True)
+                                                    if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t completed %sbp to %sbp updates'%(sm,rg,seq,trk,w,w*b))
+                                                    if self.__compression__=='gzip':
+                                                        if verbose: print('trying to create a new group for window %s'%w)
+                                                        data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                     (l*self.__MN__,),dtype='f8',
+                                                                                     compression=self.__compression__,
+                                                                                     compression_opts=self.__ratio__,shuffle=True)
+                                                    else:
+                                                        if verbose: print('trying to create a new group for window %s'%w)
+                                                        data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                     (l*self.__MN__,),dtype='f8',
+                                                                                     compression=self.__compression__,shuffle=True)
+                                                    data[:] = np.reshape(self.O[:],(l,self.__MN__))[:]                  # write it to hdf5
+                                                    self.__window__ = w                                                 # update window size
+                                                    self.write_attrs(data)                                         # save attributes
+                                                    #reset data arrays---------------------------------------------------------------------------
+                                                    self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
+                                                    self.I[:]  = self.O[:]                                              #copy back the last answer
+                                                    self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False) #reset output
+                                            else:
+                                                w,b = np.uint64(self.__window__),np.uint32(self.__window_branch__)
+                                                in_data = self.f[sm][rg][seq][trk]['moments'][str(w)] #read from hdf5 once
+                                                l = len(in_data)
+                                                #------------------------------------------------------------------------------
+                                                if self.__compression__=='gzip':
+                                                    data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                 (l,self.__MN__,),dtype='f8',
+                                                                                 compression=self.__compression__,
+                                                                                 compression_opts=self.__ratio__,shuffle=True)
+                                                else:
+                                                    data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                 (l,self.__MN__,),dtype='f8',
+                                                                                 compression=self.__compression__,shuffle=True)
+                                                data[:] = in_data[:]   #copy all the data from one hfm to the other?
+                                                self.write_attrs(data) #save attributes------------------------
+                                                #------------------------------------------------------------------------------
+                                                self.I    = mp.Array(ctypes.c_double,self.__MN__*l,lock=False) #set sratch
+                                                self.I[:] = np.reshape(data,(self.__MN__*l,))[:] #reshape to 1D array for linear
+                                                self.O    = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False)
+                                                while w*b<=r:
+                                                    if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t updating moments for %sbp to %sbp...'%(sm,rg,seq,trk,w,w*b))
+                                                    w *= b
+                                                    l = int(l/b+(1 if l%b>0 else 0)) #update the new number of windows to use and window size
+                                                    core.merge_tiled_moments_target(self.I,self.O,b,disjoint=True)
+                                                    if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t completed %sbp to %sbp updates'%(sm,rg,seq,trk,w,w*b))
+                                                    if self.__compression__=='gzip':
+                                                        data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                     (l,self.__MN__,),dtype='f8',
+                                                                                     compression=self.__compression__,
+                                                                                     compression_opts=self.__ratio__,shuffle=True)
+                                                    else:
+                                                        data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                     (l,self.__MN__,),dtype='f8',
+                                                                                     compression=self.__compression__,shuffle=True)
+                                                    data[:] = np.reshape(self.O[:],(l,self.__MN__))[:]                  # write it to hdf5
+                                                    self.__window__ = w                                                 # update window size
+                                                    self.write_attrs(data)                                         # save attributes
+                                                    #reset data arrays---------------------------------------------------------------------------
+                                                    self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
+                                                    self.I[:]  = self.O[:]                                              #copy back the last answer
+                                                    self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False) #reset output
+                                    self.set_attributes(base) #must reset the self.__window__
+                                    if 'spectrum' in self.f[sm][rg][seq][trk]:
+                                        print('spectrum updates not implemented in HFM yet...')
+                                    if 'transitions' in self.f[sm][rg][seq][trk]:
+                                        print('transition updates not implemented in HFM yet...')
+            self.f.close()
+            self.g.close()
+        return True
+
+    # we assume that the SAFE object has establish the base windows via extract_seq and that
+    # the user may or may not have then used update_seq_tree to merge together wind_branch disjoint adjacent windows
+    # we build a new hdf5 file by copying the base windows and then perform the update operations based on
+    # the new given branch factor used when the HFM object was initialized in the form: sms/rgs/seqs/trks/frs/ws
+    def rebranch_update_seq_tree(self,hdf5_in_path,hdf5_out_path,seq,window_branch=10,comp='gzip',verbose=False):
+        if os.path.exists(hdf5_in_path):
+            base = self.get_base_window_attributes(hdf5_in_path) #get the base window attributes
+            base['window_branch'] = window_branch                #this is the new branching factor update value
+            self.__compression__ = comp
+            self.f = File(hdf5_in_path,'r')                      #opens the input hfm file
+            self.g = File(hdf5_out_path,'a')                     #opens now in write mode
+            self.set_attributes(base)                            #sets the object to have base window attributes of the file
+            seqs = {seq[seq.keys()[0]]:seq.keys()[0]}
+            seq  = seq[seq.keys()[0]]
+            w,b,r = np.uint64(self.__window__),np.uint32(self.__window_branch__),min(np.uint64(self.__window_root__),np.uint64(seqs[seq]))
+            if b>=2 and w*b<=r:
+                for sm in self.f:                                           #one sample
+                    if verbose: print('updating windows for sample %s'%sm)
+                    for rg in self.f[sm]:                                   #multiple read groups
+                        if verbose: print('updating windows for read group %s'%rg)
+                        if seq in self.f[sm][rg]:
+                            for trk in self.f[sm][rg][seq]:               #multiple tracks
+                                if verbose: print('updating windows for track %s'%trk)
+                                if 'moments' in self.f[sm][rg][seq][trk]: #should have one windows size to start
+                                    if self.__tile__:
+                                        if self.__linear__:
+                                            w,b = np.uint64(self.__window__),np.uint32(self.__window_branch__)
+                                            in_data = self.f[sm][rg][seq][trk]['moments'][str(w)] #read from hdf5 once
+                                            l = len(in_data)
+                                            #------------------------------------------------------------------------------
+                                            if self.__compression__=='gzip':
+                                                if verbose: print('trying to create a new group for window %s'%w)
+                                                data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                             (l*self.__MN__,),dtype='f8',
+                                                                             compression=self.__compression__,
+                                                                             compression_opts=self.__ratio__,shuffle=True)
+                                            else:
+                                                if verbose: print('trying to create a new group for window %s'%w)
+                                                data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                             (l*self.__MN__,),dtype='f8',
+                                                                             compression=self.__compression__,shuffle=True)
+                                            data[:] = in_data[:]   #copy all the data from one hfm to the other?
+                                            self.write_attrs(data) #save attributes------------------------
+                                            #------------------------------------------------------------------------------
+                                            self.I    = mp.Array(ctypes.c_double,self.__MN__*l,lock=False) #set sratch
+                                            self.I[:] = data[:] #don't have to reshape to 1D array for linear
+                                            self.O    = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False)
+                                            while w*b<=r:
+                                                if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t updating moments for %sbp to %sbp...'%(sm,rg,seq,trk,w,w*b))
+                                                w *= b
+                                                l = int(l/b+(1 if l%b>0 else 0)) #update the new number of windows to use and window size
+                                                core.merge_tiled_moments_target(self.I,self.O,b,disjoint=True)
+                                                if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t completed %sbp to %sbp updates'%(sm,rg,seq,trk,w,w*b))
+                                                if self.__compression__=='gzip':
+                                                    if verbose: print('trying to create a new group for window %s'%w)
+                                                    data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                 (l*self.__MN__,),dtype='f8',
+                                                                                 compression=self.__compression__,
+                                                                                 compression_opts=self.__ratio__,shuffle=True)
+                                                else:
+                                                    if verbose: print('trying to create a new group for window %s'%w)
+                                                    data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                 (l*self.__MN__,),dtype='f8',
+                                                                                 compression=self.__compression__,shuffle=True)
+                                                data[:] = np.reshape(self.O[:],(l,self.__MN__))[:]                  # write it to hdf5
+                                                self.__window__ = w                                                 # update window size
+                                                self.write_attrs(data)                                         # save attributes
+                                                #reset data arrays---------------------------------------------------------------------------
+                                                self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
+                                                self.I[:]  = self.O[:]                                              #copy back the last answer
+                                                self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False) #reset output
+                                        else:
+                                            w,b = np.uint64(self.__window__),np.uint32(self.__window_branch__)
+                                            in_data = self.f[sm][rg][seq][trk]['moments'][str(w)] #read from hdf5 once
+                                            l = len(in_data)
+                                            #------------------------------------------------------------------------------
+                                            if self.__compression__=='gzip':
+                                                data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                             (l,self.__MN__,),dtype='f8',
+                                                                             compression=self.__compression__,
+                                                                             compression_opts=self.__ratio__,shuffle=True)
+                                            else:
+                                                data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                             (l,self.__MN__,),dtype='f8',
+                                                                             compression=self.__compression__,shuffle=True)
+                                            data[:] = in_data[:]   #copy all the data from one hfm to the other?
+                                            self.write_attrs(data) #save attributes------------------------
+                                            #------------------------------------------------------------------------------
+                                            self.I    = mp.Array(ctypes.c_double,self.__MN__*l,lock=False) #set sratch
+                                            self.I[:] = np.reshape(data,(self.__MN__*l,))[:] #reshape to 1D array for linear
+                                            self.O    = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False)
+                                            while w*b<=r:
+                                                if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t updating moments for %sbp to %sbp...'%(sm,rg,seq,trk,w,w*b))
+                                                w *= b
+                                                l = int(l/b+(1 if l%b>0 else 0)) #update the new number of windows to use and window size
+                                                core.merge_tiled_moments_target(self.I,self.O,b,disjoint=True)
+                                                if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t completed %sbp to %sbp updates'%(sm,rg,seq,trk,w,w*b))
+                                                if self.__compression__=='gzip':
+                                                    data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                 (l,self.__MN__,),dtype='f8',
+                                                                                 compression=self.__compression__,
+                                                                                 compression_opts=self.__ratio__,shuffle=True)
+                                                else:
+                                                    data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                                 (l,self.__MN__,),dtype='f8',
+                                                                                 compression=self.__compression__,shuffle=True)
+                                                data[:] = np.reshape(self.O[:],(l,self.__MN__))[:]                  # write it to hdf5
+                                                self.__window__ = w                                                 # update window size
+                                                self.write_attrs(data)                                         # save attributes
+                                                #reset data arrays---------------------------------------------------------------------------
+                                                self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
+                                                self.I[:]  = self.O[:]                                              #copy back the last answer
+                                                self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False) #reset output
+                                self.set_attributes(base) #must reset the self.__window__
+                                if 'spectrum' in self.f[sm][rg][seq][trk]:
+                                    print('spectrum updates not implemented in HFM yet...')
+                                if 'transitions' in self.f[sm][rg][seq][trk]:
+                                    print('transition updates not implemented in HFM yet...')
+            self.f.close()
+            self.g.close()
         return True
 
     def check(self):
@@ -608,7 +958,7 @@ class HFM:
     def store_chunk(self, hdf5_path, sm, rg, seq,):
         return []
 
-    #:::TO DO::: TRANSFORMATION SHOULD BE DONE IN CORE...
+    #:::TO DO::: TRANSFORMATION COULD BE DONE IN CORE, OR MANY CAN BE DONE ON CLIENT/APPLICATION-SIDE
 
     #-------------------------------------------------------------------------------------------------------------------
     #:::TO DO::: buffer methods can be rewritten to achieve a IGV stype API or other: sm,rg,seq,track,feature,start,stop
@@ -616,117 +966,131 @@ class HFM:
     #select entries from the hdf5 store and buffer into memory
     #seq would match the self.__seq__ value and you could check
     #:::TO DO::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-    def buffer_chunk(self, hdf5_path, sm, rg, seq, start, end,
-                     tracks=['reads_all'],features=['moments'],verbose=False):
-        #pull meta data for the chuck and set: window, bins, momentsm etc...
+    def buffer_chunk(self,hdf5_path,seq,start,end,sms='all',rgs='all',tracks='all',features='all',windows='all',verbose=False):
+        C = {}
         if os.path.exists(hdf5_path):
             self.f = File(hdf5_path, 'r')
-            if len(tracks)==1 and tracks[0]=='all':     tracks = self.__tracks__
-            if len(features)==1 and features[0]=='all': features = self.__features__
-            if verbose: print '|',
-            for track in tracks:
-                if 'moments' in features:
-                    if not sm+'/'+rg+'/'+seq+'/'+track+'/moments/%s'%self.__window__ in self.f:  #(2) check for the sm:rg:seq
-                        print('hdf5 group: %s was not found'%sm+'/'+rg+'/'+seq.keys()[0]+'/'+track+'/moments/%s'%self.__window__)
-                    else:
-                        data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/moments/%s'%self.__window__]
-                        self.read_attrs(data)
-                        end = min(end,self.__len__) #correct any loads that are out of bounds
-                        if self.__tile__:
-                            #[1] set the chunk tiles including the last partial
-                            tiles = [[i,i+self.__window__] for i in range(0,end-start,self.__window__)] #full windows
-                            if (end-start)%self.__window__>0: tiles[-1][1] = end-start
-                            #[2] get the total container size, IE number of full (and partial) tiles
-                            t = self.__len__/self.__window__
-                            if  self.__len__%self.__window__>0: t += 1
+            if sms == 'all': sms = self.f.keys()
+            for sm in sms:
+                if sm in self.f.keys():
+                    C[sm] = {}
+                    if rgs == 'all': rgs = self.f[sm].keys()
+                    print(rgs)
+                    for rg in rgs:
+                        if rg in self.f[sm]:
+                            C[sm][rg] = {}
+                            if seq in self.f[sm][rg]:
+                                print(seq)
+                                C[sm][rg][seq] = {}
+                                if tracks == 'all': tracks = self.f[sm][rg][seq].keys()
+                                print(tracks)
+                                for track in tracks:
+                                    print(track)
+                                    if track in self.f[sm][rg][seq]:
+                                        C[sm][rg][seq][track] = {}
+                                        if features == 'all': features = self.f[sm][rg][seq][track].keys()
+                                        print(features)
+                                        for feature in features:
+                                            if feature == 'moments' and feature in self.f[sm][rg][seq][track]:
+                                                C[sm][rg][seq][track][feature] = {}
+                                                if windows == 'all': windows = self.f[sm][rg][seq][track][feature].keys()
+                                                print(windows)
+                                                for w in windows:
+                                                    if w in self.f[sm][rg][seq][track][feature]:
+                                                        data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/moments/%s'%w]
+                                                        self.read_attrs(data)
+                                                        end = min(end,self.__len__) #correct any loads that are out of bounds
+                                                        if self.__tile__:
+                                                            #[1] set the chunk tiles including the last partial
+                                                            tiles = [[i,i+self.__window__] for i in range(0,end-start,self.__window__)] #full windows
+                                                            if (end-start)%self.__window__>0: tiles[-1][1] = end-start
+                                                            #[2] get the total container size, IE number of full (and partial) tiles
+                                                            t = self.__len__/self.__window__
+                                                            if  self.__len__%self.__window__>0: t += 1
 
-                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
-                            if self.__linear__:
-                                self.O    = mp.Array(ctypes.c_double,self.__MN__*len(tiles),lock=False)
-                                self.O[:] = data[a*self.__MN__:b*self.__MN__][:]
-                            else:
-                                self.O      = np.zeros((len(tiles),self.__MN__),dtype='f8')
-                                self.O[:,:] = data[a:b,:]
-                        else:
-                            y = (end-start)-self.__window__
-                            if self.__linear__:
-                                self.O    = mp.Array(ctypes.c_double,self.__MN__*y,lock=False)
-                                self.O[:] = data[start*self.__MN__:(end-self.__window__)*self.__MN__][:]
-                            else:
-                                self.O      = np.zeros((y,self.__MN__),dtype='f8')
-                                self.O[:,:] = data[start:(end-self.__window__),:]
-                        if verbose: print '%s:M:%s'%(track.replace('reads_',''),
-                                                     [1 if i else 0 for i in [self.check()]][0]),
-                if 'spectrum' in features:
-                    if not sm+'/'+rg+'/'+seq+'/'+track+'/spectrum/%s'%self.__window__ in self.f:  #(2) check for the sm:rg:seq
-                        print('hdf5 group: %s was not found'%sm+'/'+rg+'/'+seq+'/'+track+'/spectrum/%s'%self.__window__)
-                    else:
-                        data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/spectrum/%s'%self.__window__]
-                        self.read_attrs(data)
-                        end = min(end,self.__len__) #correct any loads that are out of bounds
-                        if self.__tile__:
-                            #[1] set the chunk tiles including the last partial
-                            tiles = [[i,i+self.__window__] for i in range(0,end-start,self.__window__)] #full windows
-                            if (end-start)%self.__window__>0: tiles[-1][1] = end-start
-                            #[2] get the total container size, IE number of full (and partial) tiles
-                            t = self.__len__/self.__window__
-                            if  self.__len__%self.__window__>0: t += 1
+                                                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
+                                                            if self.__linear__:
+                                                                C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_double,self.__MN__*len(tiles),lock=False)
+                                                                C[sm][rg][seq][track][feature][w][:] = data[a*self.__MN__:b*self.__MN__][:]
+                                                            else:
+                                                                C[sm][rg][seq][track][feature][w]      = np.zeros((len(tiles),self.__MN__),dtype='f8')
+                                                                C[sm][rg][seq][track][feature][w][:,:] = data[a:b,:]
+                                                        else:
+                                                            y = (end-start)-self.__window__
+                                                            if self.__linear__:
+                                                                C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_double,self.__MN__*y,lock=False)
+                                                                C[sm][rg][seq][track][feature][w][:] = data[start*self.__MN__:(end-self.__window__)*self.__MN__][:]
+                                                            else:
+                                                                C[sm][rg][seq][track][feature][w]      = np.zeros((y,self.__MN__),dtype='f8')
+                                                                C[sm][rg][seq][track][feature][w][:,:] = data[start:(end-self.__window__),:]
+                                            if feature == 'spectrum' and feature in self.f[sm][rg][seq][track]:
+                                                C[sm][rg][seq][track][feature] = {}
+                                                if windows == 'all': windows = self.f[sm][rg][seq][track][feature].keys()
+                                                for w in windows:
+                                                    if w in self.f[sm][rg][seq][track][feature]:
+                                                        data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/spectrum/%s'%w]
+                                                        self.read_attrs(data)
+                                                        end = min(end,self.__len__) #correct any loads that are out of bounds
+                                                        if self.__tile__:
+                                                            #[1] set the chunk tiles including the last partial
+                                                            tiles = [[i,i+self.__window__] for i in range(0,end-start,self.__window__)] #full windows
+                                                            if (end-start)%self.__window__>0: tiles[-1][1] = end-start
+                                                            #[2] get the total container size, IE number of full (and partial) tiles
+                                                            t = self.__len__/self.__window__
+                                                            if  self.__len__%self.__window__>0: t += 1
 
-                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
-                            if self.__linear__:
-                                self.O    = mp.Array(ctypes.c_float,self.__SN__*len(tiles),lock=False)
-                                self.O[:] = data[a*self.__SN__:b*self.__SN__][:]
-                            else:
-                                self.O      = np.zeros((len(tiles),self.__SN__),dtype='f4')
-                                self.O[:,:] = data[a:b,:]
-                        else:
-                            y = (end-start)-self.__window__
-                            if self.__linear__:
-                                self.O    = mp.Array(ctypes.c_float,self.__SN__*y,lock=False)
-                                self.O[:] = data[start*self.__SN__:(end-self.__window__)*self.__SN__][:]
-                            else:
-                                self.O      = np.zeros((y,self.__SN__),dtype='f4')
-                                self.O[:,:] = data[start:(end-self.__window__),:]
-                        if verbose: print '%s:S:%s'%(track.replace('reads_',''),
-                                                     [1 if i else 0 for i in [self.check()]][0]),
-                if 'transitions' in features:
-                    if not sm+'/'+rg+'/'+seq+'/'+track+'/transitions/%s'%self.__window__ in self.f:  #(2) check for the sm:rg:seq
-                        print('hdf5 group: %s was not found'%sm+'/'+rg+'/'+seq+'/'+track+'/transitions/%s'%self.__window__)
-                    else:
-                        data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/transitions/%s'%self.__window__]
-                        self.read_attrs(data)
-                        end = min(end,self.__len__) #correct any loads that are out of bounds
-                        if self.__tile__:
-                            #[1] set the chunk tiles including the last partial
-                            tiles = [[i,i+self.__window__] for i in range(0,end-start,self.__window__)] #full windows
-                            if (end-start)%self.__window__>0: tiles[-1][1] = end-start
-                            #[2] get the total container size, IE number of full (and partial) tiles
-                            t = self.__len__/self.__window__
-                            if  self.__len__%self.__window__>0: t += 1
+                                                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
+                                                            if self.__linear__:
+                                                                C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_float,self.__SN__*len(tiles),lock=False)
+                                                                C[sm][rg][seq][track][feature][w][:] = data[a*self.__SN__:b*self.__SN__][:]
+                                                            else:
+                                                                C[sm][rg][seq][track][feature][w]      = np.zeros((len(tiles),self.__SN__),dtype='f4')
+                                                                C[sm][rg][seq][track][feature][w][:,:] = data[a:b,:]
+                                                        else:
+                                                            y = (end-start)-self.__window__
+                                                            if self.__linear__:
+                                                                C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_float,self.__SN__*y,lock=False)
+                                                                C[sm][rg][seq][track][feature][w][:] = data[start*self.__SN__:(end-self.__window__)*self.__SN__][:]
+                                                            else:
+                                                                C[sm][rg][seq][track][feature][w]      = np.zeros((y,self.__SN__),dtype='f4')
+                                                                C[sm][rg][seq][track][feature][w][:,:] = data[start:(end-self.__window__),:]
+                                            if feature == 'transitions' and feature in self.f[sm][rg][seq][track]:
+                                                C[sm][rg][seq][track][feature] = {}
+                                                if windows == 'all': windows = self.f[sm][rg][seq][track][feature].keys()
+                                                for w in windows:
+                                                    if w in self.f[sm][rg][seq][track][feature]:
+                                                        data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/transitions/%s'%w]
+                                                        self.read_attrs(data)
+                                                        end = min(end,self.__len__) #correct any loads that are out of bounds
+                                                        if self.__tile__:
+                                                            #[1] set the chunk tiles including the last partial
+                                                            tiles = [[i,i+self.__window__] for i in range(0,end-start,self.__window__)] #full windows
+                                                            if (end-start)%self.__window__>0: tiles[-1][1] = end-start
+                                                            #[2] get the total container size, IE number of full (and partial) tiles
+                                                            t = self.__len__/self.__window__
+                                                            if  self.__len__%self.__window__>0: t += 1
 
-                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
-                            if self.__linear__:
-                                self.O    = mp.Array(ctypes.c_float,(self.__TN__**2)*len(tiles),lock=False)
-                                self.O[:] = data[a*(self.__TN__**2):b*(self.__TN__**2)][:]
-                            else:
-                                self.O        = np.zeros((len(tiles),self.__TN__,self.__TN__),dtype='f4')
-                                self.O[:,:,:] = data[a:b,:,:]
-                        else:
-                            y = (end-start)-self.__window__
-                            if self.__linear__:
-                                self.O    = mp.Array(ctypes.c_float,(self.__TN__**2)*y,lock=False)
-                                self.O[:] = data[start*(self.__TN__**2):(end-self.__window__)*(self.__TN__**2)][:]
-                            else:
-                                self.O        = np.zeros((y,self.__TN__,self.__TN__),dtype='f4')
-                                self.O[:,:,:] = data[start:(end-self.__window__),:,:]
-                        if verbose: print '%s:T:%s'%(track.replace('reads_',''),
-                                                     [1 if i else 0 for i in [self.check()]][0]),
+                                                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
+                                                            if self.__linear__:
+                                                                C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_float,(self.__TN__**2)*len(tiles),lock=False)
+                                                                C[sm][rg][seq][track][feature][w][:] = data[a*(self.__TN__**2):b*(self.__TN__**2)][:]
+                                                            else:
+                                                                C[sm][rg][seq][track][feature][w]        = np.zeros((len(tiles),self.__TN__,self.__TN__),dtype='f4')
+                                                                C[sm][rg][seq][track][feature][w][:,:,:] = data[a:b,:,:]
+                                                        else:
+                                                            y = (end-start)-self.__window__
+                                                            if self.__linear__:
+                                                                C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_float,(self.__TN__**2)*y,lock=False)
+                                                                C[sm][rg][seq][track][feature][w][:] = data[start*(self.__TN__**2):(end-self.__window__)*(self.__TN__**2)][:]
+                                                            else:
+                                                                C[sm][rg][seq][track][feature][w]        = np.zeros((y,self.__TN__,self.__TN__),dtype='f4')
+                                                                C[sm][rg][seq][track][feature][w][:,:,:] = data[start:(end-self.__window__),:,:]
+            self.__buffer__ = C
             self.f.close()
-            if verbose: print('\nall reading completed from hdf5 container for %s-bp chunk'%(end-start))
-            return True
         else:
-            print('hdf5 container path not found: %s'%hdf5_path)
+            print('hdf5_path = %s was not found.'%hdf5_path)
             return False
+        return True
 
     #:::TO DO::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
     def buffer_seq(self,hdf5_path,seq,tracks=['total'],features=['moments'],verbose=False):
