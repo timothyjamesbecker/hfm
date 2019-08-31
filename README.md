@@ -11,7 +11,7 @@ This is for high performance reading and statistical summary of the CRAM/BAM/SAM
 The following installation will build and install the hfm library into your python distribution<br>
 
 ```bash
-pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.1/hfm-0.1.1.tar.gz
+pip install https://github.com/timothyjamesbecker/hfm/releases/download/0.1.2/hfm-0.1.2.tar.gz
 extractor.py --test -o ~/hfm_test/ -v total -s 1
 
 ```
@@ -35,14 +35,14 @@ The python library offers additional functionality via the HFM class that provid
 #### HFM extractor.py command line tool
 Once installation is complete, you will have access in your environment to the command line tool that will extract either single or multi SAM/BAM/CRAM files.
 ```
-extractor.py -h
 usage: extractor.py [-h] [-i IN_PATH] [-r REF_PATH] [-o OUT_DIR] [-p CPUS]
                     [-c COMP] [-n] [-w WINDOW] [-b BRANCH] [-t TILE] [-s SEQS]
                     [-v VECTORS] [-f FEATURES] [--test]
+                    [--reproc_dir REPROC_DIR]
 
 HFM: Exact Hierarchical Feature Moment/Spectrum/Transition
 Extraction for Analysis and Visualization
-Batch Extractor Tool v0.1.0, Copyright (C) 2019 Timothy James Becker
+Batch Extractor Tool 0.1.2, Copyright (C) 2019 Timothy James Becker
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -66,6 +66,8 @@ optional arguments:
   -f FEATURES, --features FEATURES
                         comma seperated list of features that will be calculated for each vector on each sequence, all gives every available	[moments]
   --test                will run the multisample.bam test file and save result in the out_dir
+  --reproc_dir REPROC_DIR
+                        output directory for rebranching and retransforming hfm data from base windows	[None]
 
 ```
 
@@ -81,17 +83,19 @@ optional arguments:
 (8) <b>orient_um</b> = reads aligned at the position have an unmapped mate -> * or * <-<br>
 (9) <b>orient_chr</b> = reads aligned at the position have a mate that is mapped to another seq<br>
 (10) <b>clipped</b> = reads aligned at the position have either a softclip or hardclip in the CIGAR<br>
-(11) <b>deletion</b> = reads aligned at the position have a deletion inside detailed by the CIGAR<br>
-(12) <b>insertion</b> = reads aligned at the position have an insertion inside detailed by the CIGAR<br>
-(13) <b>substitution</b> = reads aligned at the position have a substitution inside detailed by the CIGAR<br>
-(14) <b>fwd_rev_diff</b> = the difference of -> to <- used for strand bias (RNA-seq)<br>
-(15) <b>mapq></b> = average mapping quality of all reads aligned at the position<br>
-(16) <b>mapq_pp</b> = average mapping quality of the properly paired reads aligned at the position<br>
-(17) <b>mapq_dis</b> = average mapping quality of the discordant reads aligned at the position<br>
-(18) <b>tlen</b> = average insert length of all paired reads aligned at the position<br>
-(19) <b>tlen_pp</b> = average insert length of the properly paired reads aligned at the position<br>
-(20) <b>tlen_dis</b> = the average insert length of the discordant reads aligned at the position<br>
-(21) <b>GC</b> = the average GC content (fast estimate) of the reads aligned at the position<br>
+(11) <b>clipped</b> = reads aligned at the position have either a left softclip or hardclip in the CIGAR<br>
+(12) <b>clipped</b> = reads aligned at the position have either a right softclip or hardclip in the CIGAR<br>
+(13) <b>deletion</b> = reads aligned at the position have a deletion inside detailed by the CIGAR<br>
+(14) <b>insertion</b> = reads aligned at the position have an insertion inside detailed by the CIGAR<br>
+(15) <b>substitution</b> = reads aligned at the position have a substitution inside detailed by the CIGAR<br>
+(16) <b>fwd_rev_diff</b> = the difference of -> to <- used for strand bias (RNA-seq)<br>
+(17) <b>mapq</b> = average mapping quality of all reads aligned at the position<br>
+(18) <b>mapq_pp</b> = average mapping quality of the properly paired reads aligned at the position<br>
+(19) <b>mapq_dis</b> = average mapping quality of the discordant reads aligned at the position<br>
+(20) <b>tlen</b> = average insert length of all paired reads aligned at the position<br>
+(21) <b>tlen_pp</b> = average insert length of the properly paired reads aligned at the position<br>
+(22) <b>tlen_dis</b> = the average insert length of the discordant reads aligned at the position<br>
+(23) <b>GC</b> = the average GC content (fast estimate) of the reads aligned at the position<br>
 <br>
 For each track we summarize using a base window. A base window is a starting point.  For disjoint window hierarchies, we use a numerically stable exact calculation of moments (Pebay, Philippe Pierre. Formulas for robust, one-pass parallel computation of covariances and arbitrary-order statistical moments. United States: N. p., 2008. Web. doi:10.2172/1028931) And for sliding windows we use an approximate variation that restarts extact calculations every x number of calculations where x is a fraction of the window size.
 #### FEATURES 
