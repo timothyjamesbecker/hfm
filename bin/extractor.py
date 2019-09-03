@@ -205,7 +205,7 @@ elif type(hdf5_path)==list:
         if os.path.exists(hdf5_final_out):
             print('hfm file %s already reprocessed as %s'%(hdf5_in,hdf5_final_out))
             break
-            
+
         t_start = time.time()
         p1 = mp.Pool(processes=cpus)
         for seq in S: #|| on seq
