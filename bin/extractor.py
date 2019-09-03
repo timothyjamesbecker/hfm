@@ -141,58 +141,58 @@ if type(hdf5_path)==str:
         seq_order  = hfm.get_sam_seq(alignment_path) #a python list sorted by largest sequence to smallest: [{str(seq):int(len)}]
         if os.path.exists(hdf5_out):
             print('alignment : %s has already been extracted as %s'%(alignment_path,hdf5_out))
-            break
-        S = []
-        sms       = hfm.get_sam_sm(alignment_path)  #this is all the read groups listed in the file
-        if seqs != 'all':
-            for i in range(len(seq_order)):
-                if seq_order[i][seq_order[i].keys()[0]] in seqs:
-                    S += [{seq_order[i].keys()[0]:seq_order[i][seq_order[i].keys()[0]]}]
         else:
-            for i in range(len(seq_order)):
-                S += [{seq_order[i].keys()[0]: seq_order[i][seq_order[i].keys()[0]]}]
-        print(S)
+            S = []
+            sms       = hfm.get_sam_sm(alignment_path)  #this is all the read groups listed in the file
+            if seqs != 'all':
+                for i in range(len(seq_order)):
+                    if seq_order[i][seq_order[i].keys()[0]] in seqs:
+                        S += [{seq_order[i].keys()[0]:seq_order[i][seq_order[i].keys()[0]]}]
+            else:
+                for i in range(len(seq_order)):
+                    S += [{seq_order[i].keys()[0]: seq_order[i][seq_order[i].keys()[0]]}]
+            print(S)
 
 
-        #debug one seq here----------------------------------------------------------
-        # s = hfm.HFM(tile=tile,window=w,window_branch=int(1E1),window_root=int(1E9), compression=comp)
-        # s.extract_seq(alignment_path,base_name,sms,S[-1],merge_rg=True,tracks=vect,features=feat,verbose=True)
-        # s.update_seq_tree(base_name,S[-1])
-        #
-        # self = s
-        # sm = 'TCRBOA7_T'
-        # rg = 'all'
-        # seq = '21'
-        # track = 'total'
-        # hdf5_path = base_name
-        # import ctypes
-        # import numpy as np
-        # import core
-        # from h5py import File
-        #debug one seq here----------------------------------------------------------
+            #debug one seq here----------------------------------------------------------
+            # s = hfm.HFM(tile=tile,window=w,window_branch=int(1E1),window_root=int(1E9), compression=comp)
+            # s.extract_seq(alignment_path,base_name,sms,S[-1],merge_rg=True,tracks=vect,features=feat,verbose=True)
+            # s.update_seq_tree(base_name,S[-1])
+            #
+            # self = s
+            # sm = 'TCRBOA7_T'
+            # rg = 'all'
+            # seq = '21'
+            # track = 'total'
+            # hdf5_path = base_name
+            # import ctypes
+            # import numpy as np
+            # import core
+            # from h5py import File
+            #debug one seq here----------------------------------------------------------
 
-        t_start = time.time()
-        p1 = mp.Pool(processes=cpus)
-        print('determined the following rgs: %s'%sms)
-        print('starting %s samples with %s total rgs and merge_rg=%s\nv=%s\nf=%s\nw=%s\nb=%s\ntile=%s'%\
-              (len(set(sms.values())),len(sms),merge_rg,vect,feat,w,w_b,tile))
-        for seq in S: #|| on seq
-            p1.apply_async(process_seq,
-                           args=(alignment_path,base_name,sms,seq,
-                                 merge_rg,vect,feat,w,w_b,tile,True,comp,True),
-                           callback=collect_results)
-            time.sleep(0.25)
-        p1.close()
-        p1.join()
-        if all([l['result']=='' for l in result_list]) and len(glob.glob(hdf5_path + '/seqs/*.hdf5')) >= len(S):
-            hfm.merge_seqs(hdf5_path+'/seqs/',hdf5_out) #merge the files
-            print(subprocess.check_output(['rm','-rf',hdf5_path+'/seqs/'])) #delete the seperate files
-        else:
-            s = ''
-            for l in result_list: s += l['result']
-            with open(hdf5_path+'%s.error'%base_name,'w') as f: f.write(s)
-        t_stop = time.time()
-        print('sample %s || cython with %s cpus in %s sec'%(base_name,cpus,t_stop-t_start))
+            t_start = time.time()
+            p1 = mp.Pool(processes=cpus)
+            print('determined the following rgs: %s'%sms)
+            print('starting %s samples with %s total rgs and merge_rg=%s\nv=%s\nf=%s\nw=%s\nb=%s\ntile=%s'%\
+                  (len(set(sms.values())),len(sms),merge_rg,vect,feat,w,w_b,tile))
+            for seq in S: #|| on seq
+                p1.apply_async(process_seq,
+                               args=(alignment_path,base_name,sms,seq,
+                                     merge_rg,vect,feat,w,w_b,tile,True,comp,True),
+                               callback=collect_results)
+                time.sleep(0.25)
+            p1.close()
+            p1.join()
+            if all([l['result']=='' for l in result_list]) and len(glob.glob(hdf5_path + '/seqs/*.hdf5')) >= len(S):
+                hfm.merge_seqs(hdf5_path+'/seqs/',hdf5_out) #merge the files
+                print(subprocess.check_output(['rm','-rf',hdf5_path+'/seqs/'])) #delete the seperate files
+            else:
+                s = ''
+                for l in result_list: s += l['result']
+                with open(hdf5_path+'%s.error'%base_name,'w') as f: f.write(s)
+            t_stop = time.time()
+            print('sample %s || cython with %s cpus in %s sec'%(base_name,cpus,t_stop-t_start))
 
 elif type(hdf5_path)==list:
     for hdf5_in in hdf5_path:
@@ -205,24 +205,23 @@ elif type(hdf5_path)==list:
         S = sorted([{seqs[k]:k} for k in seqs], key=lambda x: x,reverse=True)
         if os.path.exists(hdf5_final_out):
             print('hfm file %s already reprocessed as %s'%(hdf5_in,hdf5_final_out))
-            break
-
-        t_start = time.time()
-        p1 = mp.Pool(processes=cpus)
-        for seq in S: #|| on seq
-            hdf5_out = args.out_dir+'/seqs/%s.%s.hdf5'%(base_name,seq[seq.keys()[0]])
-            p1.apply_async(reprocess_seq,
-                           args=(hdf5_in,hdf5_out,seq,w_b,True,comp,True),
-                           callback=collect_results)
-            time.sleep(0.25)
-        p1.close()
-        p1.join()
-        if all([l['result']=='' for l in result_list]) and len(glob.glob(args.out_dir+'/seqs/*.hdf5')) >= len(S):
-            hfm.merge_seqs(args.out_dir+'/seqs/',hdf5_final_out) #merge the files
-            print(subprocess.check_output(['rm','-rf',args.out_dir+'/seqs/'])) #delete the seperate files
         else:
-            s = ''
-            for l in result_list: s += l['result']
-            with open(args.out_dir+'/%s.error'%base_name,'w') as f: f.write(s)
-        t_stop  = time.time()
-        print('sample %s || cython with %s cpus in %s sec' % (base_name,cpus,t_stop-t_start))
+            t_start = time.time()
+            p1 = mp.Pool(processes=cpus)
+            for seq in S: #|| on seq
+                hdf5_out = args.out_dir+'/seqs/%s.%s.hdf5'%(base_name,seq[seq.keys()[0]])
+                p1.apply_async(reprocess_seq,
+                               args=(hdf5_in,hdf5_out,seq,w_b,True,comp,True),
+                               callback=collect_results)
+                time.sleep(0.25)
+            p1.close()
+            p1.join()
+            if all([l['result']=='' for l in result_list]) and len(glob.glob(args.out_dir+'/seqs/*.hdf5')) >= len(S):
+                hfm.merge_seqs(args.out_dir+'/seqs/',hdf5_final_out) #merge the files
+                print(subprocess.check_output(['rm','-rf',args.out_dir+'/seqs/'])) #delete the seperate files
+            else:
+                s = ''
+                for l in result_list: s += l['result']
+                with open(args.out_dir+'/%s.error'%base_name,'w') as f: f.write(s)
+            t_stop  = time.time()
+            print('sample %s || cython with %s cpus in %s sec' % (base_name,cpus,t_stop-t_start))
