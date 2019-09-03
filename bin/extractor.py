@@ -64,7 +64,7 @@ elif (args.out_dir is not None) and (args.reproc_dir is not None) and (args.in_p
     print('using advanced reprocessing mode for rebranching and retranforming base windows of existing hfm data...')
     alignment_paths = []
     hdf5_reproc_path = args.reproc_dir
-    hdf5_path = glob.glob(args.out_dir+'/*.hdf5')
+    hdf5_path = set(glob.glob(args.out_dir+'/*.hdf5')).difference(set(glob.glob(args.out_dir+'/*.reproc.hdf5')))
     if len(hdf5_path)<1:
         print('using advanced reprocessing mode without any hfm data files...')
         raise IOError
