@@ -138,7 +138,9 @@ if type(hdf5_path)==str:
         base_name = hdf5_path+'/seqs/'+alignment_path.rsplit('/')[-1].rsplit(extension)[0]
         hdf5_out  = base_name.replace('/seqs/','/')+'.merged.hdf5'
         seq_order  = hfm.get_sam_seq(alignment_path) #a python list sorted by largest sequence to smallest: [{str(seq):int(len)}]
-
+        if os.path.exists(hdf5_out):
+            print('alignment : %s has already been extracted as %s'%(alignment_path,hdf5_out))
+            break
         S = []
         sms       = hfm.get_sam_sm(alignment_path)  #this is all the read groups listed in the file
         if seqs != 'all':
@@ -149,6 +151,7 @@ if type(hdf5_path)==str:
             for i in range(len(seq_order)):
                 S += [{seq_order[i].keys()[0]: seq_order[i][seq_order[i].keys()[0]]}]
         print(S)
+
 
         #debug one seq here----------------------------------------------------------
         # s = hfm.HFM(tile=tile,window=w,window_branch=int(1E1),window_root=int(1E9), compression=comp)
@@ -199,7 +202,10 @@ elif type(hdf5_path)==list:
         if 'window' in meta: w = meta['window']
         seqs = hfm.HFM().get_seqs(hdf5_in) #these are {seq:len}
         S = sorted([{seqs[k]:k} for k in seqs], key=lambda x: x,reverse=True)
-
+        if os.path.exists(hdf5_final_out):
+            print('hfm file %s already reprocessed as %s'%(hdf5_in,hdf5_final_out))
+            break
+            
         t_start = time.time()
         p1 = mp.Pool(processes=cpus)
         for seq in S: #|| on seq
