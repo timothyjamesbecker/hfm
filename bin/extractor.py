@@ -153,7 +153,6 @@ if type(hdf5_path)==str:
                     S += [{seq_order[i].keys()[0]: seq_order[i][seq_order[i].keys()[0]]}]
             print(S)
 
-
             #debug one seq here----------------------------------------------------------
             # s = hfm.HFM(tile=tile,window=w,window_branch=int(1E1),window_root=int(1E9), compression=comp)
             # s.extract_seq(alignment_path,base_name,sms,S[-1],merge_rg=True,tracks=vect,features=feat,verbose=True)
@@ -177,11 +176,12 @@ if type(hdf5_path)==str:
             print('starting %s samples with %s total rgs and merge_rg=%s\nv=%s\nf=%s\nw=%s\nb=%s\ntile=%s'%\
                   (len(set(sms.values())),len(sms),merge_rg,vect,feat,w,w_b,tile))
             for seq in S: #|| on seq
-                p1.apply_async(process_seq,
-                               args=(alignment_path,base_name,sms,seq,
-                                     merge_rg,vect,feat,w,w_b,tile,True,comp,True),
-                               callback=collect_results)
-                time.sleep(0.25)
+                if not os.path.exists(base_name+'.seq.'+seq[seq.keys()[0]]+'.hdf5'):
+                    p1.apply_async(process_seq,
+                                   args=(alignment_path,base_name,sms,seq,
+                                         merge_rg,vect,feat,w,w_b,tile,True,comp,True),
+                                   callback=collect_results)
+                    time.sleep(0.25)
             p1.close()
             p1.join()
             if all([l['result']=='' for l in result_list]) and len(glob.glob(hdf5_path + '/seqs/*.hdf5')) >= len(S):
@@ -190,7 +190,7 @@ if type(hdf5_path)==str:
             else:
                 s = ''
                 for l in result_list: s += l['result']
-                with open(hdf5_path+'%s.error'%base_name,'w') as f: f.write(s)
+                with open(base_name+'.error','w') as f: f.write(s)
             t_stop = time.time()
             print('sample %s || cython with %s cpus in %s sec'%(base_name,cpus,t_stop-t_start))
 

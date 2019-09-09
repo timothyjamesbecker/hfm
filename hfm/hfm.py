@@ -975,40 +975,40 @@ class HFM:
                 if sm in self.f.keys():
                     C[sm] = {}
                     if rgs == 'all': rgs = self.f[sm].keys()
-                    print(rgs)
+                    if verbose: print(rgs)
                     for rg in rgs:
                         if rg in self.f[sm]:
                             C[sm][rg] = {}
                             if seq in self.f[sm][rg]:
-                                print(seq)
+                                if verbose: print(seq)
                                 C[sm][rg][seq] = {}
                                 if tracks == 'all': tracks = self.f[sm][rg][seq].keys()
-                                print(tracks)
+                                if verbose: print(tracks)
                                 for track in tracks:
-                                    print(track)
+                                    if verbose: print(track)
                                     if track in self.f[sm][rg][seq]:
                                         C[sm][rg][seq][track] = {}
                                         if features == 'all': features = self.f[sm][rg][seq][track].keys()
-                                        print(features)
+                                        if verbose: print(features)
                                         for feature in features:
                                             if feature == 'moments' and feature in self.f[sm][rg][seq][track]:
                                                 C[sm][rg][seq][track][feature] = {}
                                                 if windows == 'all': windows = self.f[sm][rg][seq][track][feature].keys()
-                                                print(windows)
+                                                if verbose: print(windows)
                                                 for w in windows:
                                                     if w in self.f[sm][rg][seq][track][feature]:
                                                         data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/moments/%s'%w]
                                                         self.read_attrs(data)
-                                                        end = min(end,self.__len__) #correct any loads that are out of bounds
+                                                        end = int(min(end,self.__len__)) #correct any loads that are out of bounds
                                                         if self.__tile__:
                                                             #[1] set the chunk tiles including the last partial
-                                                            tiles = [[i,i+self.__window__] for i in range(0,end-start,self.__window__)] #full windows
+                                                            tiles = [[int(i),int(i+self.__window__)] for i in range(0,end-start,self.__window__)] #full windows
                                                             if (end-start)%self.__window__>0: tiles[-1][1] = end-start
                                                             #[2] get the total container size, IE number of full (and partial) tiles
-                                                            t = self.__len__/self.__window__
+                                                            t = int(self.__len__/self.__window__)
                                                             if  self.__len__%self.__window__>0: t += 1
 
-                                                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
+                                                            a,b = int(start/self.__window__),int(start/self.__window__+len(tiles))
                                                             if self.__linear__:
                                                                 C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_double,self.__MN__*len(tiles),lock=False)
                                                                 C[sm][rg][seq][track][feature][w][:] = data[a*self.__MN__:b*self.__MN__][:]
@@ -1016,7 +1016,7 @@ class HFM:
                                                                 C[sm][rg][seq][track][feature][w]      = np.zeros((len(tiles),self.__MN__),dtype='f8')
                                                                 C[sm][rg][seq][track][feature][w][:,:] = data[a:b,:]
                                                         else:
-                                                            y = (end-start)-self.__window__
+                                                            y = int((end-start)-self.__window__)
                                                             if self.__linear__:
                                                                 C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_double,self.__MN__*y,lock=False)
                                                                 C[sm][rg][seq][track][feature][w][:] = data[start*self.__MN__:(end-self.__window__)*self.__MN__][:]
@@ -1030,16 +1030,16 @@ class HFM:
                                                     if w in self.f[sm][rg][seq][track][feature]:
                                                         data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/spectrum/%s'%w]
                                                         self.read_attrs(data)
-                                                        end = min(end,self.__len__) #correct any loads that are out of bounds
+                                                        end = int(min(end,self.__len__))#correct any loads that are out of bounds
                                                         if self.__tile__:
                                                             #[1] set the chunk tiles including the last partial
-                                                            tiles = [[i,i+self.__window__] for i in range(0,end-start,self.__window__)] #full windows
+                                                            tiles = [[int(i),int(i+self.__window__)] for i in range(0,end-start,self.__window__)] #full windows
                                                             if (end-start)%self.__window__>0: tiles[-1][1] = end-start
                                                             #[2] get the total container size, IE number of full (and partial) tiles
-                                                            t = self.__len__/self.__window__
+                                                            t = int(self.__len__/self.__window__)
                                                             if  self.__len__%self.__window__>0: t += 1
 
-                                                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
+                                                            a,b = int(start/self.__window__),int(start/self.__window__+len(tiles))
                                                             if self.__linear__:
                                                                 C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_float,self.__SN__*len(tiles),lock=False)
                                                                 C[sm][rg][seq][track][feature][w][:] = data[a*self.__SN__:b*self.__SN__][:]
@@ -1047,7 +1047,7 @@ class HFM:
                                                                 C[sm][rg][seq][track][feature][w]      = np.zeros((len(tiles),self.__SN__),dtype='f4')
                                                                 C[sm][rg][seq][track][feature][w][:,:] = data[a:b,:]
                                                         else:
-                                                            y = (end-start)-self.__window__
+                                                            y = int((end-start)-self.__window__)
                                                             if self.__linear__:
                                                                 C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_float,self.__SN__*y,lock=False)
                                                                 C[sm][rg][seq][track][feature][w][:] = data[start*self.__SN__:(end-self.__window__)*self.__SN__][:]
@@ -1061,16 +1061,16 @@ class HFM:
                                                     if w in self.f[sm][rg][seq][track][feature]:
                                                         data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/transitions/%s'%w]
                                                         self.read_attrs(data)
-                                                        end = min(end,self.__len__) #correct any loads that are out of bounds
+                                                        end = int(min(end,self.__len__)) #correct any loads that are out of bounds
                                                         if self.__tile__:
                                                             #[1] set the chunk tiles including the last partial
-                                                            tiles = [[i,i+self.__window__] for i in range(0,end-start,self.__window__)] #full windows
+                                                            tiles = [[int(i),int(i+self.__window__)] for i in range(0,end-start,self.__window__)] #full windows
                                                             if (end-start)%self.__window__>0: tiles[-1][1] = end-start
                                                             #[2] get the total container size, IE number of full (and partial) tiles
-                                                            t = self.__len__/self.__window__
+                                                            t = int(self.__len__/self.__window__)
                                                             if  self.__len__%self.__window__>0: t += 1
 
-                                                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
+                                                            a,b = int(start/self.__window__),int(start/self.__window__+len(tiles))
                                                             if self.__linear__:
                                                                 C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_float,(self.__TN__**2)*len(tiles),lock=False)
                                                                 C[sm][rg][seq][track][feature][w][:] = data[a*(self.__TN__**2):b*(self.__TN__**2)][:]
@@ -1078,7 +1078,7 @@ class HFM:
                                                                 C[sm][rg][seq][track][feature][w]        = np.zeros((len(tiles),self.__TN__,self.__TN__),dtype='f4')
                                                                 C[sm][rg][seq][track][feature][w][:,:,:] = data[a:b,:,:]
                                                         else:
-                                                            y = (end-start)-self.__window__
+                                                            y = int((end-start)-self.__window__)
                                                             if self.__linear__:
                                                                 C[sm][rg][seq][track][feature][w]    = mp.Array(ctypes.c_float,(self.__TN__**2)*y,lock=False)
                                                                 C[sm][rg][seq][track][feature][w][:] = data[start*(self.__TN__**2):(end-self.__window__)*(self.__TN__**2)][:]
