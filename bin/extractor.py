@@ -153,23 +153,6 @@ if type(hdf5_path)==str:
                     S += [{seq_order[i].keys()[0]: seq_order[i][seq_order[i].keys()[0]]}]
             print(S)
 
-            #debug one seq here----------------------------------------------------------
-            # s = hfm.HFM(tile=tile,window=w,window_branch=int(1E1),window_root=int(1E9), compression=comp)
-            # s.extract_seq(alignment_path,base_name,sms,S[-1],merge_rg=True,tracks=vect,features=feat,verbose=True)
-            # s.update_seq_tree(base_name,S[-1])
-            #
-            # self = s
-            # sm = 'TCRBOA7_T'
-            # rg = 'all'
-            # seq = '21'
-            # track = 'total'
-            # hdf5_path = base_name
-            # import ctypes
-            # import numpy as np
-            # import core
-            # from h5py import File
-            #debug one seq here----------------------------------------------------------
-
             t_start = time.time()
             p1 = mp.Pool(processes=cpus)
             print('determined the following rgs: %s'%sms)
@@ -179,7 +162,7 @@ if type(hdf5_path)==str:
                 if not os.path.exists(base_name+'.seq.'+seq[seq.keys()[0]]+'.hdf5'):
                     p1.apply_async(process_seq,
                                    args=(alignment_path,base_name,sms,seq,
-                                         merge_rg,vect,feat,w,w_b,tile,True,comp,True),
+                                         merge_rg,vect,feat,w,w_b,tile,False,comp,True),
                                    callback=collect_results)
                     time.sleep(0.25)
             p1.close()
@@ -225,3 +208,31 @@ elif type(hdf5_path)==list:
                 with open(args.out_dir+'/%s.error'%base_name,'w') as f: f.write(s)
             t_stop  = time.time()
             print('sample %s || cython with %s cpus in %s sec' % (base_name,cpus,t_stop-t_start))
+
+"""
+#debug one seq here----------------------------------------------------------
+if not os.path.exists(hdf5_path + '/seqs/'): os.makedirs(hdf5_path + '/seqs/')
+seq = {}
+seq_order = hfm.get_sam_seq(alignment_paths[0])
+for s in seq_order:
+    if s[s.keys()[0]] in args.seqs.rsplit(','):
+        seq = {s.keys()[0]:s[s.keys()[0]]}
+tracks,features,verbose = vect,feat,True
+extension = '.'+alignment_paths[0].rsplit('.')[-1]
+base_name = hdf5_path+'/seqs/'+alignment_paths[0].rsplit('/')[-1].rsplit(extension)[0]
+hdf5_out_path = hdf5_path+'/'+base_name+'.seq.'+seq[seq.keys()[0]]+'.hdf5'
+
+s = hfm.HFM(tile=tile,window=w,window_branch=w_b,window_root=int(1E9),
+            chunk=int(1E6),compression='gzip')
+s.extract_seq(alignment_paths[0],base_name,hfm.get_sam_sm(alignment_paths[0]),
+              seq,merge_rg=merge_rg,tracks=tracks,features=features,verbose=verbose)
+print('seq %s extracted, starting window updates'%seq[seq.keys()[0]])
+s.update_seq_tree(base_name,seq,verbose=verbose)
+hdf5_path = base_name
+import numpy as np
+from h5py import File
+import core
+import ctypes
+self = s
+#debug one seq here----------------------------------------------------------
+"""

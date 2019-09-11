@@ -555,6 +555,7 @@ class HFM:
     #workflow is that you make a new seqs folder and make new hdf5_windows that then get merged
     def update_seq_tree(self,hdf5_path,seq,verbose=False):
         k = seq.keys()[0]
+        base = self.get_base_window_attributes(hdf5_path+'.seq.'+seq[k]+'.hdf5')  # get the base window attributes
         w,b,r = np.uint64(self.__window__),np.uint32(self.__window_branch__),min(np.uint64(self.__window_root__),np.uint64(k))
         if b>=2 and w*b<=r:
             self.f = File(hdf5_path+'.seq.'+seq[k]+'.hdf5','a')       #one input
@@ -626,6 +627,7 @@ class HFM:
                                             self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
                                             self.I[:]  = self.O[:]                                              #copy back the last answer
                                             self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False) #reset output
+                            self.set_attributes(base)  # must reset the self.__window__
                             if 'spectrum' in self.f[sm][rg][seq[k]][track]:
                                 print('spectrum updates not implemented in HFM yet...')
                             if 'transitions' in self.f[sm][rg][seq[k]][track]:
@@ -702,7 +704,7 @@ class HFM:
                                                 w,b = np.uint64(self.__window__),np.uint32(self.__window_branch__)
                                                 in_data = self.f[sm][rg][seq][trk]['moments'][str(w)] #read from hdf5 once
                                                 l = len(in_data)
-                                                #------------------------------------------------------------------------------
+                                                #copies the original window size data from f to g---------------------------
                                                 if self.__compression__=='gzip':
                                                     if verbose: print('trying to create a new group for window %s'%w)
                                                     data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
@@ -716,7 +718,7 @@ class HFM:
                                                                                  compression=self.__compression__,shuffle=True)
                                                 data[:] = in_data[:]   #copy all the data from one hfm to the other?
                                                 self.write_attrs(data) #save attributes------------------------
-                                                #------------------------------------------------------------------------------
+                                                #copies the original window size data from f to g---------------------------
                                                 self.I    = mp.Array(ctypes.c_double,self.__MN__*l,lock=False) #set sratch
                                                 self.I[:] = data[:] #don't have to reshape to 1D array for linear
                                                 self.O    = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False)
