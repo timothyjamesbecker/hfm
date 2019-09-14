@@ -166,7 +166,7 @@ def associate_bas_rgs(bas_dir):
     return B
 
 # main workflow for downloading fastq files and producing alignment files for a reference with duplicate marked entries for hfm creation
-def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
+def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
     #preliminary:::::::::::::::::::::::::::::::::::::::
     print('starting sample %s'%sample)
     sample_dir = log_path+'/%s'%sample
@@ -189,20 +189,23 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg):
         #-----------------------------------
         rgs = []
         for rg_tag in RG[sample]:
-            rg = rg_tag.split('ID:')[-1].split('\t')[0]
-            rgs += [rg]
-            url = base_url+'/%s/sequence_read/%s_*.filt.fastq.gz'%(sample,rg)
-            print(url)
-            command = ['cd',sample_dir,'&&','wget','-c',url] #can restart downloads with -c and a failure
-            try:
-                output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
-            except Exception:
-                err += ' '.join(command) + '\n'
-                pass
+            for x in range(retries): #retry the connection retries number of times
+                rg = rg_tag.split('ID:')[-1].split('\t')[0]
+                rgs += [rg]
+                url = base_url+'/%s/sequence_read/%s_*.filt.fastq.gz'%(sample,rg)
+                print(url)
+                command = ['cd',sample_dir,'&&','wget','-c',url] #can restart downloads with -c and a failure
+                try:
+                    output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+                except Exception as E:
+                    err += str(E)+'\n'
+                    print('possible connection loss for %s'%url)
+                    time.sleep(300) #wait 5 minutes for retry
+                    pass
         #------------------------------------------------------
-        if err=='' and len(glob.glob(sample_dir+'/'+'*.filt.fastq.gz'))>=len(RG[sample]): #at least
-            write_log_status(log_status,stage,1)
-            last_id+=1 #continue
+        if len(glob.glob(sample_dir+'/'+'*.filt.fastq.gz'))>=len(RG[sample]): #even if wget looses connection
+            write_log_status(log_status,stage,1)                                #can contintue if retries were
+            last_id+=1 #continue                                                #successful...
         else:
             write_log_status(log_status,stage,-1)
             return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
@@ -472,7 +475,7 @@ if __name__ == '__main__':
     # start || wget calls
     p1 = mp.Pool(processes=cpus)
     for sample in pick_list:  # for each sample download both mapped and unmapped patterns
-        p1.apply_async(wget_fastq_align,args=(base_url,log_path,ref_mmi,sample,merge_rg),callback=collect_results)
+        p1.apply_async(wget_fastq_align,args=(base_url,log_path,ref_mmi,sample,merge_rg,20),callback=collect_results)
         time.sleep(1)
     p1.close()
     p1.join()
