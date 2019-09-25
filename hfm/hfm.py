@@ -27,7 +27,7 @@ def get_sam_seq(alignment_path, sort_by_largest=True):
     am = pysam.AlignmentFile(alignment_path,'rb')
     seqs = {s['SN']:s['LN'] for s in am.header['SQ']}
     am.close()
-    return sorted([{seqs[k]:k} for k in seqs], key=lambda x: x, reverse=sort_by_largest)
+    return sorted([{seqs[k]:k} for k in seqs], key=lambda x: list(x.keys())[0], reverse=sort_by_largest)
 
 #given an alignment file, SAM, BAM,CRAM reads the sequences and creates a dict mapping:
 #{sample_name:[rg1_name,rg2_name,...rgx_name}
@@ -131,12 +131,12 @@ class HFM:
         if not bins is None:                      #bins used to generate counts
             self.__bins__ = bins                  #user definable
         else: #can add different bin functions here later...
-            self.__bins__ = range(0,self.__max_depth__,self.__max_depth__/int(1E1))+[np.uint32(-1)]
+            self.__bins__ = [x for x in range(0,self.__max_depth__,np.uint32(self.__max_depth__/int(1E1)))]+[np.uint32(-1)]
         self.B = mp.Array(ctypes.c_float,self.__bins__,lock=False)
         self.__fast__ = fast #fast implies that you are doing a sliding window calculation
         #moment positions for easy future additions
         self.__N__,self.__SUM__,self.__MIN__,self.__MAX__, \
-        self.__M1__,self.__M2__,self.__M3__,self.__M4__ = range(8)
+        self.__M1__,self.__M2__,self.__M3__,self.__M4__ = [x for x in range(8)]
         self.__MN__,self.__SN__,self.__TN__ = 8,len(self.__bins__)-1,len(self.__bins__)-1
         self.__moments__  = ['N','SUM','MIN','MAX','M1','M2','M3','M4']
         self.__tracks__   = ['total','proper_pair','discordant','primary','alternate',
@@ -285,14 +285,13 @@ class HFM:
     def extract_chunk(self, alignment_path, hdf5_path, sms, seq, start, end, 
                       merge_rg=True,tracks=['total'],features=['moments'],verbose=False):
         #PRE------------------------------------------------------------------------------------------------------PRE 
-        self.__seq__ = seq.keys()[0]
-        self.__len__ = seq[seq.keys()[0]]           
+        self.__seq__ = list(seq.keys())[0]
+        self.__len__ = seq[list(seq.keys())[0]]
         self.ap = alignment_path
         if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))}
         if len(tracks)==1 and tracks[0]=='all':     tracks = self.__tracks__
         if len(features)==1 and features[0]=='all': features = self.__features__
-        if verbose: print '|',
-        end = min(end,seq[seq.keys()[0]]) #correct any loads that are out of bounds
+        end = min(end,seq[list(seq.keys())[0]]) #correct any loads that are out of bounds
         self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,merge_rg) #dict, single loading
         self.f = File(hdf5_path, 'a')
         #PRE------------------------------------------------------------------------------------------------------PRE
@@ -302,7 +301,7 @@ class HFM:
             tiles = [[i,i+self.__window__] for i in range(0,end-start,self.__window__)] #full windows
             if (end-start)%self.__window__>0: tiles[-1][1] = end-start
             #[2] set the total container size in case it is not intialized
-            t = self.__len__/self.__window__
+            t = int(self.__len__/self.__window__)
             if  self.__len__%self.__window__>0: t += 1
             #[3] iterate on the tracks return from the input buffer tracks
             for track in tracks:
@@ -311,7 +310,7 @@ class HFM:
                         self.I = self.A[track][rg] #pull out the track here-----------------------------------------------
                         if 'moments' in features:
                             self.__buffer__ = 'moments'
-                            if not sms[rg]+'/'+rg+'/'+seq.keys()[0]+'/'+track+'/moments/%s'%self.__window__ in self.f:  #(2) check for the sm:rg:seq
+                            if not sms[rg]+'/'+rg+'/'+list(seq.keys())[0]+'/'+track+'/moments/%s'%self.__window__ in self.f:  #(2) check for the sm:rg:seq
                                 if self.__linear__:
                                     if self.__compression__=='gzip':
                                         data = self.f.create_dataset(sms[rg]+'/'+rg+'/'+self.__seq__+'/'+track+'/moments/%s'%self.__window__,
@@ -333,12 +332,11 @@ class HFM:
                             self.O = mp.Array(ctypes.c_double,self.__MN__*len(tiles),lock=False)
                             for i in range(len(tiles)):                                                #make ||
                                 core.exact_moments(self.I,tiles[i][0],tiles[i][1],self.O,i*self.__MN__)  #make ||
-                            if verbose: print '%s:M:%s'%(track,[1 if i else 0 for i in [self.check()]][0]),
-                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
+                            a,b = int(start/self.__window__),int(start/self.__window__+len(tiles))
                             if self.__linear__:
                                 data[a*self.__MN__:b*self.__MN__] = self.O[:]
                             else:
-                                self.O = np.reshape(self.O,(len(self.O)/self.__MN__,self.__MN__))
+                                self.O = np.reshape(self.O,(int(len(self.O)/self.__MN__),self.__MN__))
                                 data[a:b,:] = self.O[:,:]
                             self.write_attrs(data)
                         if 'spectrum' in features:
@@ -366,9 +364,7 @@ class HFM:
                             for i in range(len(tiles)):                                               #make ||
                                 core.spectrum_bin(self.I,tiles[i][0],tiles[i][1],                       #make ||
                                                 self.B,self.O,self.__SN__,i*self.__SN__)              #make ||
-                                
-                            if verbose: print '%s:S:%s'%(track,[1 if i else 0 for i in [self.check()]][0]),
-                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
+                            a,b = int(start/self.__window__),int(start/self.__window__+len(tiles))
                             if self.__linear__:
                                 data[a*self.__SN__:b*self.__SN__] = self.O[:]
                             else:
@@ -400,8 +396,7 @@ class HFM:
                             for i in range(len(tiles)):                                              #make ||
                                 core.transitions_bin(self.I,tiles[i][0],tiles[i][1]-1,                 #2D=> 1 lookback
                                                    self.B,self.O,self.__TN__,i*(self.__TN__**2))     #make ||
-                            if verbose: print '%s:T:%s'%(track,[1 if i else 0 for i in [self.check()]][0]),
-                            a,b = (start/self.__window__),(start/self.__window__+len(tiles))
+                            a,b = int(start/self.__window__),int(start/self.__window__+len(tiles))
                             if self.__linear__:
                                 data[a*(self.__TN__**2):b*(self.__TN__**2)] = self.O[:]
                             else:
@@ -447,11 +442,10 @@ class HFM:
                                     core.exact_moments(self.I,i,i+self.__window__,self.O,i*self.__MN__)
                             else: #exact algorithm
                                 core.sliding_moments(self.I,0,(end-start),self.__window__,self.__window__/self.__restart__,self.O)
-                            if verbose: print '%s:M:%s'%(track,[1 if i else 0 for i in [self.check()]][0]),
                             if self.__linear__:
                                 data[start*self.__MN__:(end-self.__window__)*self.__MN__] = self.O[:]
                             else:
-                                self.O = np.reshape(self.O,(len(self.O)/self.__MN__,self.__MN__))
+                                self.O = np.reshape(self.O,(int(len(self.O)/self.__MN__),self.__MN__))
                                 data[start:(end-self.__window__),:] = self.O[:,:]
                             self.write_attrs(data)
                         if 'spectrum' in features:
@@ -469,7 +463,7 @@ class HFM:
                                                                  dtype='f4',compression=self.__compression__,shuffle=True)
                                 else:
                                     if self.__compression__=='gzip':
-                                        data = self.f.create_dataset(sms[rg]+'/'+rg+'/'+seq.keys()[0]+'/'+track+'/spectrum/%s'%self.__window__,
+                                        data = self.f.create_dataset(sms[rg]+'/'+rg+'/'+list(seq.keys())[0]+'/'+track+'/spectrum/%s'%self.__window__,
                                                                      ((self.__len__-self.__window__),self.__SN__),
                                                                      dtype='f4',compression=self.__compression__,
                                                                      compression_opts=self.__ratio__,shuffle=True)
@@ -481,11 +475,10 @@ class HFM:
                                 data = self.f[sms[rg]+'/'+rg+'/'+self.__seq__+'/'+track+'/spectrum/%s'%self.__window__]
                             self.O = mp.Array(ctypes.c_float,self.__SN__*y,lock=False)
                             core.sliding_spectrum_bin(self.I,0,(end-start),self.__window__,self.B,self.O)
-                            if verbose: print '%s:S:%s'%(track,[1 if i else 0 for i in [self.check()]][0]),
                             if self.__linear__:
                                 data[start*self.__SN__:(end-self.__window__)*self.__SN__] = self.O[:]
                             else:
-                                self.O = np.reshape(self.O,(len(self.O)/self.__SN__,self.__SN__))
+                                self.O = np.reshape(self.O,(int(len(self.O)/self.__SN__),self.__SN__))
                                 data[start:(end-self.__window__),:] = self.O[:,:]
                             self.write_attrs(data)
                         if 'transitions' in features:
@@ -503,7 +496,7 @@ class HFM:
                                                                  dtype='f4',compression=self.__compression__,shuffle=True)
                                 else:
                                     if self.__compression__=='gzip':
-                                        data = self.f.create_dataset(sms[rg]+'/'+rg+'/'+seq.keys()[0]+'/'+track+'/transitions/%s'%self.__window__,
+                                        data = self.f.create_dataset(sms[rg]+'/'+rg+'/'+list(seq.keys())[0]+'/'+track+'/transitions/%s'%self.__window__,
                                                                      ((self.__len__-self.__window__),self.__TN__,self.__TN__),
                                                                      dtype='f4',compression=self.__compression__,
                                                                      compression_opts=self.__ratio__,shuffle=True)
@@ -515,11 +508,10 @@ class HFM:
                                 data = self.f[sms[rg]+'/'+rg+'/'+self.__seq__+'/'+track+'/transitions/%s'%self.__window__]
                             self.O = mp.Array(ctypes.c_float,(self.__TN__**2)*(y-1),  lock=False)
                             core.sliding_transitions_bin(self.I,0,(end-start),self.__window__,self.B,self.O)
-                            if verbose: print '%s:T:%s'%(track,[1 if i else 0 for i in [self.check()]][0]),
                             if self.__linear__:
                                 data[start*(self.__TN__**2):(end-self.__window__-1)*(self.__TN__**2)] = self.O[:]
                             else:
-                                self.O = np.reshape(self.O,(len(self.O)/(self.__TN__**2),self.__TN__,self.__TN__))
+                                self.O = np.reshape(self.O,(int(len(self.O)/(self.__TN__**2)),self.__TN__,self.__TN__))
                                 data[start:(end-self.__window__-1),:,:] = self.O[:,:,:]
                             self.write_attrs(data)
         #FULL----------------------------------------------------------------------------------------------------FULL
@@ -534,8 +526,8 @@ class HFM:
     #|| on each seq into mp pool
     def extract_seq(self,alignment_path,base_name,sms,seq,
                     merge_rg=True,tracks=['total'],features=['moments'],verbose=False):
-        k = seq.keys()[0]
-        passes = k/self.__chunk__
+        k = list(seq.keys())[0]
+        passes = int(k/self.__chunk__)
         last   = k%self.__chunk__
         if last == 0: last = []
         else:         last = [last]
@@ -554,7 +546,7 @@ class HFM:
     #can be established:  data[sm][rg][seq][track][features][window]
     #workflow is that you make a new seqs folder and make new hdf5_windows that then get merged
     def update_seq_tree(self,hdf5_path,seq,verbose=False):
-        k = seq.keys()[0]
+        k = list(seq.keys())[0]
         base = self.get_base_window_attributes(hdf5_path+'.seq.'+seq[k]+'.hdf5')  # get the base window attributes
         w,b,r = np.uint64(self.__window__),np.uint32(self.__window_branch__),min(np.uint64(self.__window_root__),np.uint64(k))
         if b>=2 and w*b<=r:
@@ -809,8 +801,8 @@ class HFM:
             self.f = File(hdf5_in_path,'r')                      #opens the input hfm file
             self.g = File(hdf5_out_path,'a')                     #opens now in write mode
             self.set_attributes(base)                            #sets the object to have base window attributes of the file
-            seqs = {seq[seq.keys()[0]]:seq.keys()[0]}
-            seq  = seq[seq.keys()[0]]
+            seqs = {seq[list(seq.keys())[0]]:list(seq.keys())[0]}
+            seq  = seq[list(seq.keys())[0]]
             w,b,r = np.uint64(self.__window__),np.uint32(self.__window_branch__),min(np.uint64(self.__window_root__),np.uint64(seqs[seq]))
             if b>=2 and w*b<=r:
                 for sm in self.f:                                           #one sample
@@ -923,23 +915,23 @@ class HFM:
         if self.__buffer__ == 'moments':
             if self.__linear__:
                 return all([self.O[i*self.__MN__]==self.__window__ \
-                            for i in range(len(self.O)/self.__MN__)])
+                            for i in range(int(len(self.O)/self.__MN__))])
             else:
                 return all([self.O[i,self.__N__]==self.__window__ for i in range(self.O.shape[0])])
         if self.__buffer__ == 'spectrum':
             if self.__linear__:
                 return all([np.sum(self.O[i*self.__SN__:(i+1)*self.__SN__])==self.__window__ \
-                            for i in range(len(self.O)/self.__SN__)])       
+                            for i in range(int(len(self.O)/self.__SN__))])
             else:
                 return all([np.sum(self.O[i,:])==self.__window__ for i in range(len(self.O))])
         if self.__buffer__ == 'transitions':
             if self.__linear__:
                 if not self.__tile__:
                     return all([np.sum(self.O[i*self.__TN__**2:(i+1)*self.__TN__**2])==self.__window__-1 \
-                                for i in range((len(self.O)-1)/self.__TN__**2)])                          #2D is 1 lookback
+                                for i in range(int((len(self.O)-1)/self.__TN__**2))])                          #2D is 1 lookback
                 else:
                     return all([np.sum(self.O[i*self.__TN__**2:(i+1)*self.__TN__**2])==self.__window__-1 \
-                                for i in range(len(self.O)/self.__TN__**2)]) 
+                                for i in range(int(len(self.O)/self.__TN__**2))])
             else:
                 if not self.__tile__:
                     return all([np.sum(self.O[i,:,:])==self.__window__-1 for i in range(len(self.O)-1)]) #2D is 1 lookback
@@ -949,11 +941,11 @@ class HFM:
     #given a buffered chunk, reform fro 1D to N    
     def reshape_buffer(self,feature='moments'):
         if   'moments' == feature:
-            self.O = np.reshape(self.O,(len(self.O)/self.__MN__,self.__MN__))
+            self.O = np.reshape(self.O,(int(len(self.O)/self.__MN__),self.__MN__))
         elif 'spectrum' == feature:
-            self.O = np.reshape(self.O,(len(self.O)/self.__SN__,self.__SN__))
+            self.O = np.reshape(self.O,(int(len(self.O)/self.__SN__),self.__SN__))
         elif 'transitions' == feature:
-            self.O = np.reshape(self.O,(len(self.O)/(self.__TN__**2),self.__TN__,self.__TN__))
+            self.O = np.reshape(self.O,(int(len(self.O)/(self.__TN__**2)),self.__TN__,self.__TN__))
         return True
     
     #save tranformations of a chunk
@@ -972,11 +964,11 @@ class HFM:
         C = {}
         if os.path.exists(hdf5_path):
             self.f = File(hdf5_path, 'r')
-            if sms == 'all': sms = self.f.keys()
+            if sms == 'all': sms = list(self.f.keys())
             for sm in sms:
                 if sm in self.f.keys():
                     C[sm] = {}
-                    if rgs == 'all': rgs = self.f[sm].keys()
+                    if rgs == 'all': rgs = list(self.f[sm].keys())
                     if verbose: print(rgs)
                     for rg in rgs:
                         if rg in self.f[sm]:
@@ -984,18 +976,18 @@ class HFM:
                             if seq in self.f[sm][rg]:
                                 if verbose: print(seq)
                                 C[sm][rg][seq] = {}
-                                if tracks == 'all': tracks = self.f[sm][rg][seq].keys()
+                                if tracks == 'all': tracks = list(self.f[sm][rg][seq].keys())
                                 if verbose: print(tracks)
                                 for track in tracks:
                                     if verbose: print(track)
                                     if track in self.f[sm][rg][seq]:
                                         C[sm][rg][seq][track] = {}
-                                        if features == 'all': features = self.f[sm][rg][seq][track].keys()
+                                        if features == 'all': features = list(self.f[sm][rg][seq][track].keys())
                                         if verbose: print(features)
                                         for feature in features:
                                             if feature == 'moments' and feature in self.f[sm][rg][seq][track]:
                                                 C[sm][rg][seq][track][feature] = {}
-                                                if windows == 'all': windows = self.f[sm][rg][seq][track][feature].keys()
+                                                if windows == 'all': windows = list(self.f[sm][rg][seq][track][feature].keys())
                                                 if verbose: print(windows)
                                                 for w in windows:
                                                     if w in self.f[sm][rg][seq][track][feature]:
@@ -1027,7 +1019,7 @@ class HFM:
                                                                 C[sm][rg][seq][track][feature][w][:,:] = data[start:(end-self.__window__),:]
                                             if feature == 'spectrum' and feature in self.f[sm][rg][seq][track]:
                                                 C[sm][rg][seq][track][feature] = {}
-                                                if windows == 'all': windows = self.f[sm][rg][seq][track][feature].keys()
+                                                if windows == 'all': windows = list(self.f[sm][rg][seq][track][feature].keys())
                                                 for w in windows:
                                                     if w in self.f[sm][rg][seq][track][feature]:
                                                         data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/spectrum/%s'%w]
@@ -1058,7 +1050,7 @@ class HFM:
                                                                 C[sm][rg][seq][track][feature][w][:,:] = data[start:(end-self.__window__),:]
                                             if feature == 'transitions' and feature in self.f[sm][rg][seq][track]:
                                                 C[sm][rg][seq][track][feature] = {}
-                                                if windows == 'all': windows = self.f[sm][rg][seq][track][feature].keys()
+                                                if windows == 'all': windows = list(self.f[sm][rg][seq][track][feature].keys())
                                                 for w in windows:
                                                     if w in self.f[sm][rg][seq][track][feature]:
                                                         data = self.f[sm+'/'+rg+'/'+seq+'/'+track+'/transitions/%s'%w]
@@ -1096,8 +1088,8 @@ class HFM:
 
     #:::TO DO::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
     def buffer_seq(self,hdf5_path,seq,tracks=['total'],features=['moments'],verbose=False):
-        k = seq.keys()[0]
-        passes = k/self.__chunk__
+        k = list(seq.keys())[0]
+        passes = int(k/self.__chunk__)
         last   = k%self.__chunk__
         if last == 0: last = []
         else:         last = [last]

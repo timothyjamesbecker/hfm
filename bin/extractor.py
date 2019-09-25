@@ -15,7 +15,11 @@ import argparse
 import os
 import time
 import glob
-import subprocess32 as subprocess
+import sys
+if sys.version_info<(3,0):
+    import subprocess32 as subprocess
+else:
+    import subprocess
 #----------------------------
 import multiprocessing as mp
 from hfm import hfm
@@ -110,20 +114,20 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,
                     window_root=int(1E9),chunk=chunk,compression=comp)
         s.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,
                       tracks=tracks,features=features,verbose=verbose)
-        print('seq %s extracted, starting window updates'%seq[seq.keys()[0]])
+        print('seq %s extracted, starting window updates'%seq[list(seq.keys())[0]])
         if tree: s.update_seq_tree(base_name,seq,verbose=verbose)
     except Exception as E:
         result = str(E)
         pass
     stop = time.time()
-    return {seq[seq.keys()[0]]:stop-start,'result':result}
+    return {seq[list(seq.keys())[0]]:stop-start,'result':result}
 
 #can call this in ||---------------------------------------------------------------------------------
 def reprocess_seq(hdf5_in,hdf5_out,seq,window_branch,tree='True',comp='gzip',verbose=False):
     result = ''
     start = time.time()
     try:
-        print('reprocessing seq %s window updates'%seq[seq.keys()[0]])
+        print('reprocessing seq %s window updates'%seq[list(seq.keys())[0]])
         if tree: hfm.HFM().rebranch_update_seq_tree(hdf5_in,hdf5_out,seq,window_branch,comp,verbose)
     except Exception as E:
         result = str(E)
@@ -146,11 +150,11 @@ if type(hdf5_path)==str:
             sms       = hfm.get_sam_sm(alignment_path)  #this is all the read groups listed in the file
             if seqs != 'all':
                 for i in range(len(seq_order)):
-                    if seq_order[i][seq_order[i].keys()[0]] in seqs:
-                        S += [{seq_order[i].keys()[0]:seq_order[i][seq_order[i].keys()[0]]}]
+                    if seq_order[i][list(seq_order[i].keys())[0]] in seqs:
+                        S += [{list(seq_order[i].keys())[0]:seq_order[i][list(seq_order[i].keys())[0]]}]
             else:
                 for i in range(len(seq_order)):
-                    S += [{seq_order[i].keys()[0]: seq_order[i][seq_order[i].keys()[0]]}]
+                    S += [{list(seq_order[i].keys())[0]: seq_order[i][list(seq_order[i].keys())[0]]}]
             print(S)
 
             t_start = time.time()
@@ -159,7 +163,7 @@ if type(hdf5_path)==str:
             print('starting %s samples with %s total rgs and merge_rg=%s\nv=%s\nf=%s\nw=%s\nb=%s\ntile=%s'%\
                   (len(set(sms.values())),len(sms),merge_rg,vect,feat,w,w_b,tile))
             for seq in S: #|| on seq
-                if not os.path.exists(base_name+'.seq.'+seq[seq.keys()[0]]+'.hdf5'):
+                if not os.path.exists(base_name+'.seq.'+seq[list(seq.keys())[0]]+'.hdf5'):
                     p1.apply_async(process_seq,
                                    args=(alignment_path,base_name,sms,seq,
                                          merge_rg,vect,feat,w,w_b,tile,False,comp,True),
@@ -185,14 +189,14 @@ elif type(hdf5_path)==list:
         meta = hfm.HFM().get_base_window_attributes(hdf5_in)
         if 'window' in meta: w = meta['window']
         seqs = hfm.HFM().get_seqs(hdf5_in) #these are {seq:len}
-        S = sorted([{seqs[k]:k} for k in seqs], key=lambda x: x,reverse=True)
+        S = sorted([{seqs[k]:k} for k in seqs], key=lambda x: list(x.keys())[0],reverse=True)
         if os.path.exists(hdf5_final_out):
             print('hfm file %s already reprocessed as %s'%(hdf5_in,hdf5_final_out))
         else:
             t_start = time.time()
             p1 = mp.Pool(processes=cpus)
             for seq in S: #|| on seq
-                hdf5_out = args.out_dir+'/seqs/%s.%s.hdf5'%(base_name,seq[seq.keys()[0]])
+                hdf5_out = args.out_dir+'/seqs/%s.%s.hdf5'%(base_name,seq[list(seq.keys())[0]])
                 p1.apply_async(reprocess_seq,
                                args=(hdf5_in,hdf5_out,seq,w_b,True,comp,True),
                                callback=collect_results)
