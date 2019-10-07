@@ -344,7 +344,7 @@ class HFM:
                                                                      (t,self.__MN__),dtype='f8',compression=self.__compression__,shuffle=True)
                             else: #need to delete the entry?
                                 data = self.f[sms[rg]+'/'+rg+'/'+self.__seq__+'/'+track+'/moments/%s'%self.__window__]
-                                self.O = mp.Array(ctypes.c_double,self.__MN__*len(tiles),lock=False)
+                            self.O = mp.Array(ctypes.c_double,self.__MN__*len(tiles),lock=False)
                             for i in range(len(tiles)):                                                #make ||
                                 core.exact_moments(self.I,tiles[i][0],tiles[i][1],self.O,i*self.__MN__)  #make ||
                             a,b = int(start/self.__window__),int(start/self.__window__+len(tiles))
