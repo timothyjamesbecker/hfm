@@ -61,6 +61,21 @@ def get_hdf5_sm(hdf5_path):
 #    f = h5py.File(hdf5_path, 'a')
     return True
 
+def get_hdf5_map(hdf5_path):
+    S = {}
+    f = File(hdf5_path,'r')
+    for sm in f:
+        S[sm] = {}
+        for rg in f[sm]:
+            S[sm][rg] = {}
+            for seq in f[sm][rg]:
+                S[sm][rg][seq] = {}
+                for trk in f[sm][rg][seq]:
+                    S[sm][rg][seq][trk] = {}
+                    for ftr in f[sm][rg][seq][trk]:
+                        S[sm][rg][seq][trk][ftr] = sorted(list(f[sm][rg][seq][trk][ftr].keys()),key=lambda x: int(x))
+    return S
+
 #given a bunch of hdf5s done in ||, merge into one
 #may have to midfiy for multi window version...
 def merge_seqs(hdf5_dir, hdf5_out):
@@ -329,7 +344,7 @@ class HFM:
                                                                      (t,self.__MN__),dtype='f8',compression=self.__compression__,shuffle=True)
                             else: #need to delete the entry?
                                 data = self.f[sms[rg]+'/'+rg+'/'+self.__seq__+'/'+track+'/moments/%s'%self.__window__]
-                            self.O = mp.Array(ctypes.c_double,self.__MN__*len(tiles),lock=False)
+                                self.O = mp.Array(ctypes.c_double,self.__MN__*len(tiles),lock=False)
                             for i in range(len(tiles)):                                                #make ||
                                 core.exact_moments(self.I,tiles[i][0],tiles[i][1],self.O,i*self.__MN__)  #make ||
                             a,b = int(start/self.__window__),int(start/self.__window__+len(tiles))
@@ -1087,7 +1102,7 @@ class HFM:
         return True
 
     #:::TO DO::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-    def buffer_seq(self,hdf5_path,seq,tracks=['total'],features=['moments'],verbose=False):
+    def buffer_seq(self,hdf5_path,seq,tracks='all',features='all',windows='all',verbose=False):
         k = list(seq.keys())[0]
         passes = int(k/self.__chunk__)
         last   = k%self.__chunk__
@@ -1097,11 +1112,52 @@ class HFM:
         x = 0
         for i in range(len(chunks)):
             self.buffer_chunk(hdf5_path, seq, x, x+chunks[i],
-                              tracks=['reads_all'],features=['moments'],verbose=False)
+                              tracks=tracks,features=features,windows=windows,verbose=False)
             x += chunks[i]
         return True
     #-------------------------------------------------------------------------------------------------------------------
-    
+    #we assume that you have called buffer_chunk and now have data inside __buffer__
+    #will take the largest window with l windows and collapse them into one MN size vector
+    def chunk_collapse(self,verbose=False):
+        if self.__tile__:
+            if self.__linear__:
+                for sm in self.__buffer__:
+                    for rg in self.__buffer__[sm]:
+                        for seq in self.__buffer__[sm][rg]:
+                            for trk in self.__buffer__[sm][rg][seq]:
+                                if 'moments' in self.__buffer__[sm][rg][seq][trk]:
+                                    ftr = 'moments' #now take largest window from avaible
+                                    w = sorted(list(self.__buffer__[sm][rg][seq][trk][ftr].keys()),key=lambda x: int(x))[0]
+                                    data = self.__buffer__[sm][rg][seq][trk][ftr][w]
+                                    l = len(data)
+                                    self.I    = mp.Array(ctypes.c_double,int(self.__MN__*l),lock=False)
+                                    self.I[:] = data[:] #don't have to reshape to 1D array for linear
+                                    self.O    = mp.Array(ctypes.c_double,int(self.__MN__),lock=False)
+                                    core.merge_tiled_moments_target(self.I,self.O,np.uint32(l),True)
+                                    #self.O needs to be reshapped for np arrays right?
+                                    #self.__len__ needs to be cast to str for keys...
+                                    self.__buffer__[sm][rg][seq][trk][ftr][str(self.__len__)] = self.O #set a new window
+            else:
+                for sm in self.__buffer__:
+                    for rg in self.__buffer__[sm]:
+                        for seq in self.__buffer__[sm][rg]:
+                            for trk in self.__buffer__[sm][rg][seq]:
+                                if 'moments' in self.__buffer__[sm][rg][seq][trk]:
+                                    ftr = 'moments' #now take largest window from avaible
+                                    w = sorted(list(self.__buffer__[sm][rg][seq][trk][ftr].keys()),key=lambda x: int(x))[0]
+                                    data = self.__buffer__[sm][rg][seq][trk][ftr][w]
+                                    l = len(data)
+                                    self.I    = mp.Array(ctypes.c_double,int(self.__MN__*l),lock=False)
+                                    self.I[:] = np.reshape(data,(self.__MN__*l,))[:] #reshape for non-linear
+                                    self.O    = mp.Array(ctypes.c_double,int(self.__MN__),lock=False)
+                                    core.merge_tiled_moments_target(self.I,self.O,np.uint32(l*self.__MN__),True)
+                                    self.__buffer__[sm][rg][seq][trk][ftr][str(self.__len__)] = self.O #set a new window
+        else:
+            #sliding
+            #:::TO DO:::
+            print('not implemented yet..')
+        return True
+
     #feature access from the container here-----------------------
     def window_range(self,f,normalized=False):
         if not normalized:
