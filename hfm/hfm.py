@@ -548,6 +548,7 @@ class HFM:
         else:         last = [last]
         chunks = [self.__chunk__ for y in range(passes)]+last
         if verbose: print('seq=%s\ttracks=%s\tfeatures=%s'%(seq,','.join(tracks),','.join(features)))
+        if verbose: print('seq=%s\tchunks=%s'%(seq,chunks))
         x = 0
         for i in range(len(chunks)):
             self.extract_chunk(alignment_path,base_name+'.seq.'+seq[k]+'.hdf5',sms,{seq[k]:k},x,x+chunks[i]+self.__window__, 

@@ -108,7 +108,8 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,
                 tile=True,tree=True,comp='gzip',verbose=False):
     result = ''
     start = time.time()
-    chunk = max(window,int(1E6)/len(sms)) #targets 1E6 bp to start for single samples
+    samples = list(set([sms[k] for k in sms]))
+    chunk = max(window,window*(int(1E6/len(sms))/window))
     try:
         s = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
                     window_root=int(1E9),chunk=chunk,compression=comp)
@@ -123,7 +124,7 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,
     return {seq[list(seq.keys())[0]]:stop-start,'result':result}
 
 #can call this in ||---------------------------------------------------------------------------------
-def reprocess_seq(hdf5_in,hdf5_out,seq,window_branch,tree='True',comp='gzip',verbose=False):
+def reprocess_seq(hdf5_in,hdf5_out,seq,window_branch,tree=True,comp='gzip',verbose=False):
     result = ''
     start = time.time()
     try:
@@ -166,7 +167,7 @@ if type(hdf5_path)==str:
                 if not os.path.exists(base_name+'.seq.'+seq[list(seq.keys())[0]]+'.hdf5'):
                     p1.apply_async(process_seq,
                                    args=(alignment_path,base_name,sms,seq,
-                                         merge_rg,vect,feat,w,w_b,tile,False,comp,True),
+                                         merge_rg,vect,feat,w,w_b,tile,True,comp,True),
                                    callback=collect_results)
                     time.sleep(0.25)
             p1.close()
@@ -217,21 +218,24 @@ elif type(hdf5_path)==list:
 #debug one seq here----------------------------------------------------------
 if not os.path.exists(hdf5_path + '/seqs/'): os.makedirs(hdf5_path + '/seqs/')
 seq = {}
-seq_order = hfm.get_sam_seq(alignment_paths[0])
-for s in seq_order:
+alignment_path = alignment_paths[0]
+seq_order = hfm.get_sam_seq(alignment_path)
+for s in seq_order[0:1]:
     if s[s.keys()[0]] in args.seqs.rsplit(','):
         seq = {s.keys()[0]:s[s.keys()[0]]}
 tracks,features,verbose = vect,feat,True
-extension = '.'+alignment_paths[0].rsplit('.')[-1]
-base_name = hdf5_path+'/seqs/'+alignment_paths[0].rsplit('/')[-1].rsplit(extension)[0]
-hdf5_out_path = hdf5_path+'/'+base_name+'.seq.'+seq[seq.keys()[0]]+'.hdf5'
-
+extension = '.'+alignment_path.rsplit('.')[-1]
+base_name = hdf5_path+'/seqs/'+alignment_path.rsplit('/')[-1].rsplit(extension)[0]
+hdf5_out_path = base_name+'.seq.'+seq[seq.keys()[0]]+'.hdf5'
+sms = hfm.get_sam_sm(alignment_path)
+samples = list(set([sms[k] for k in sms]))
+chunk = max(w,w*(int(1E6/len(sms))/w))
 s = hfm.HFM(tile=tile,window=w,window_branch=w_b,window_root=int(1E9),
-            chunk=int(1E6),compression='gzip')
-s.extract_seq(alignment_paths[0],base_name,hfm.get_sam_sm(alignment_paths[0]),
+            chunk=chunk,compression='gzip')
+s.extract_seq(alignment_paths[0],base_name,sms,
               seq,merge_rg=merge_rg,tracks=tracks,features=features,verbose=verbose)
-print('seq %s extracted, starting window updates'%seq[seq.keys()[0]])
-s.update_seq_tree(base_name,seq,verbose=verbose)
+# print('seq %s extracted, starting window updates'%seq[seq.keys()[0]])
+# s.update_seq_tree(base_name,seq,verbose=verbose)
 hdf5_path = base_name
 import numpy as np
 from h5py import File
