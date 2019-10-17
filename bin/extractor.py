@@ -184,6 +184,7 @@ if type(hdf5_path)==str:
             p1.close()
             p1.join()
             if all([l['result']=='' for l in result_list]) and len(glob.glob(hdf5_path + '/seqs/*.hdf5')) >= len(S):
+                print(subprocess.check_output((['rm',hdf5_path+'/seqs/*temp*.hdf5'])))
                 hfm.merge_seqs(hdf5_path+'/seqs/',hdf5_out) #merge the files
                 print(subprocess.check_output(['rm','-rf',hdf5_path+'/seqs/'])) #delete the seperate files
             else:
@@ -216,6 +217,7 @@ elif type(hdf5_path)==list:
             p1.close()
             p1.join()
             if all([l['result']=='' for l in result_list]) and len(glob.glob(args.out_dir+'/seqs/*.hdf5')) >= len(S):
+                print(subprocess.check_output((['rm',args.out_dir+'/seqs/*temp*.hdf5'])))
                 hfm.merge_seqs(args.out_dir+'/seqs/',hdf5_final_out) #merge the files
                 print(subprocess.check_output(['rm','-rf',args.out_dir+'/seqs/'])) #delete the seperate files
             else:
