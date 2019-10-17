@@ -599,8 +599,8 @@ class HFM:
                                                 data = self.f.create_dataset(sm+'/'+rg+'/'+seq[k]+'/'+track+'/moments/%s'%w,
                                                                              (l*self.__MN__,),dtype='f8',
                                                                              compression=self.__compression__,shuffle=True)
-                                            data[:] = np.reshape(self.O[:],(l,self.__MN__))[:]                  # write it to hdf5
-                                            self.__window__ = w                                                 # update window size
+                                            data[:] = self.O[:]                                            # write it to hdf5
+                                            self.__window__ = w                                            # update window size
                                             self.write_attrs(data)                                         # save attributes
                                             #reset data arrays---------------------------------------------------------------------------
                                             self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
@@ -833,7 +833,7 @@ class HFM:
                                         if self.__linear__:
                                             w,b = np.uint64(self.__window__),np.uint32(self.__window_branch__)
                                             in_data = self.f[sm][rg][seq][trk]['moments'][str(w)] #read from hdf5 once
-                                            l = len(in_data)
+                                            l = len(in_data)/self.__MN__
                                             #------------------------------------------------------------------------------
                                             if self.__compression__=='gzip':
                                                 if verbose: print('trying to create a new group for window %s'%w)
@@ -869,8 +869,8 @@ class HFM:
                                                     data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
                                                                                  (l*self.__MN__,),dtype='f8',
                                                                                  compression=self.__compression__,shuffle=True)
-                                                data[:] = np.reshape(self.O[:],(l,self.__MN__))[:]                  # write it to hdf5
-                                                self.__window__ = w                                                 # update window size
+                                                data[:] = self.O[:]                                            # write it to hdf5
+                                                self.__window__ = w                                            # update window size
                                                 self.write_attrs(data)                                         # save attributes
                                                 #reset data arrays---------------------------------------------------------------------------
                                                 self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
@@ -918,6 +918,8 @@ class HFM:
                                                 self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
                                                 self.I[:]  = self.O[:]                                              #copy back the last answer
                                                 self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False) #reset output
+                                    else:
+                                        print('sliding window moment updates not implemented in HFM yet...')
                                 self.set_attributes(base) #must reset the self.__window__
                                 if 'spectrum' in self.f[sm][rg][seq][trk]:
                                     print('spectrum updates not implemented in HFM yet...')
@@ -926,6 +928,101 @@ class HFM:
             self.f.close()
             self.g.close()
         return True
+
+    def clean_end_seq(self,hdf5_in_path,hdf5_out_path,seq,comp='gzip',max_correct=10,verbose=False):
+        if os.path.exists(hdf5_in_path):
+            base = self.get_base_window_attributes(hdf5_in_path) #get the base window attributes
+            self.__compression__ = comp
+            self.f = File(hdf5_in_path,'r')                      #opens the input hfm file
+            self.g = File(hdf5_out_path,'a')                     #opens now in write mode
+            self.set_attributes(base)                            #sets the object to have base window attributes of the file
+            seqs = {seq[list(seq.keys())[0]]:list(seq.keys())[0]}
+            seq  = seq[list(seq.keys())[0]]
+            w,r = np.uint64(self.__window__),min(np.uint64(self.__window_root__),np.uint64(seqs[seq]))
+            for sm in self.f:                                           #one sample
+                    if verbose: print('cleaning windows for sample %s'%sm)
+                    for rg in self.f[sm]:                                   #multiple read groups
+                        if verbose: print('cleaning windows for read group %s'%rg)
+                        if seq in self.f[sm][rg]:
+                            for trk in self.f[sm][rg][seq]:               #multiple tracks
+                                if verbose: print('cleaning windows for track %s'%trk)
+                                if 'moments' in self.f[sm][rg][seq][trk]: #should have one windows size to start
+                                    if self.__tile__:
+                                        if self.__linear__:
+                                            w,b = np.uint64(self.__window__),np.uint32(self.__window_branch__)
+                                            in_data = self.f[sm][rg][seq][trk]['moments'][str(w)] #read from hdf5 once
+                                            l = len(in_data)/self.__MN__
+                                            #------------------------------------------------------------------------------
+                                            if self.__compression__=='gzip':
+                                                if verbose: print('trying to create a new group for window %s'%w)
+                                                data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                             (l*self.__MN__,),dtype='f8',
+                                                                             compression=self.__compression__,
+                                                                             compression_opts=self.__ratio__,shuffle=True)
+                                            else:
+                                                if verbose: print('trying to create a new group for window %s'%w)
+                                                data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                             (l*self.__MN__,),dtype='f8',
+                                                                             compression=self.__compression__,shuffle=True)
+                                            #clean the ends of the data
+                                            seq_len   = in_data.attrs['len']
+                                            last_w    = 1.0*seq_len%w
+                                            self.I    = mp.Array(ctypes.c_double,self.__MN__*l,lock=False) #set sratch
+                                            self.I[:] = in_data[:] #don't have to reshape to 1D array for linear
+                                            i,x = (l-1)*self.__MN__,0
+                                            if self.I[i]<last_w:
+                                                if verbose: print('corrected last window size from %s to %s'%(self.I[i],last_w))
+                                                self.I[i:i+self.__MN__] = [last_w,0.0,0.0,0.0,0.0,0.0,0.0,-3.0]
+                                                i -= self.__MN__
+                                                x += 1
+                                            while(self.I[i]<w and x<max_correct):
+                                                if verbose: print('corrected window index %s to size %s'%(i,w))
+                                                self.I[i:i+self.__MN__] = [w,0.0,0.0,0.0,0.0,0.0,0.0,-3.0]
+                                                i -= self.__MN__
+                                                x += 1
+                                            if verbose: print('corrected %s windows'%x)
+                                            data[:] = self.I[:]
+                                            self.write_attrs(data)  # save attributes------------------------
+                                        else:
+                                            w,b = np.uint64(self.__window__),np.uint32(self.__window_branch__)
+                                            in_data = self.f[sm][rg][seq][trk]['moments'][str(w)] #read from hdf5 once
+                                            l = len(in_data)
+                                            #------------------------------------------------------------------------------
+                                            if self.__compression__=='gzip':
+                                                data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                             (l,self.__MN__,),dtype='f8',
+                                                                             compression=self.__compression__,
+                                                                             compression_opts=self.__ratio__,shuffle=True)
+                                            else:
+                                                data = self.g.create_dataset(sm+'/'+rg+'/'+seq+'/'+trk+'/moments/%s'%w,
+                                                                             (l,self.__MN__,),dtype='f8',
+                                                                             compression=self.__compression__,shuffle=True)
+                                            seq_len   = in_data.attrs['len']
+                                            last_w    = 1.0*seq_len%w
+                                            self.I    = mp.Array(ctypes.c_double,self.__MN__*l,lock=False) #set sratch
+                                            self.I[:] = np.reshape(in_data,(self.__MN__*l,))[:] #reshape to 1D array for linear
+                                            i,x = (l-1)*self.__MN__,0
+                                            if self.I[i]<last_w:
+                                                if verbose: print('corrected last window size from %s to %s'%(self.I[i],last_w))
+                                                self.I[i:i+self.__MN__] = [last_w,0.0,0.0,0.0,0.0,0.0,0.0,-3.0]
+                                                i -= self.__MN__
+                                                x += 1
+                                            while(self.I[i]<w and x<max_correct):
+                                                if verbose: print('corrected window index %s to size %s'%(i,w))
+                                                self.I[i:i+self.__MN__] = [w,0.0,0.0,0.0,0.0,0.0,0.0,-3.0]
+                                                i -= self.__MN__
+                                                x += 1
+                                            if verbose: print('corrected %s windows'%x)
+                                            data[:] = np.reshape(self.I[:],(l,self.__MN__))[:]
+                                            self.write_attrs(data)  # save attributes------------------------
+                                    else:
+                                        print('sliding window moment cleaning not implemented in HFM ye')
+                                if 'spectrum' in self.f[sm][rg][seq][trk]:
+                                    print('spectrum cleaning not implemented in HFM yet...')
+                                if 'transitions' in self.f[sm][rg][seq][trk]:
+                                    print('transition cleaning not implemented in HFM yet...')
+            self.f.close()
+            self.g.close()
 
     def check(self):
         if self.__buffer__ == 'moments':

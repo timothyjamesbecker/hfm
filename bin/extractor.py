@@ -46,6 +46,7 @@ f = 'comma seperated list of features that will be calculated for each vector on
 parser.add_argument('-f','--features',type=str,help=f)
 parser.add_argument('--test',action='store_true',help='will run the multisample.bam test file and save result in the out_dir')
 parser.add_argument('--reproc_dir',type=str,help='output directory for rebranching and retransforming hfm data from base windows\t[None]')
+parser.add_argument('--no_clean',action='store_true',help='will not check and cleans end points for rebranching operations\t[False]')
 args = parser.parse_args()
 
 if args.out_dir is not None:
@@ -76,7 +77,6 @@ elif (args.out_dir is not None) and (args.reproc_dir is not None) and (args.in_p
 else:
     print('no input directory was specified!\n')
     raise IOError
-
 if args.cpus is not None:     cpus = args.cpus
 else:                         cpus = 1
 if args.no_merge_rg:          merge_rg = False
@@ -87,6 +87,8 @@ if args.branch is not None:   w_b  = args.branch
 else:                         w_b  = 10
 if args.tile is not None:     tile = args.tile
 else:                         tile = True
+if args.no_clean is None:     end_clean = args.no_clean
+else:                         end_clean = True
 if args.seqs is not None:     seqs = args.seqs.split(',')
 else:                         seqs = 'all'
 if args.vectors is not None:  vect = args.vectors.split(',')
@@ -124,12 +126,21 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,
     return {seq[list(seq.keys())[0]]:stop-start,'result':result}
 
 #can call this in ||---------------------------------------------------------------------------------
-def reprocess_seq(hdf5_in,hdf5_out,seq,window_branch,tree=True,comp='gzip',verbose=False):
+def reprocess_seq(hdf5_in,hdf5_out,seq,window_branch,tree=True,end_clean=True,comp='gzip',verbose=False):
     result = ''
     start = time.time()
     try:
-        print('reprocessing seq %s window updates'%seq[list(seq.keys())[0]])
-        if tree: hfm.HFM().rebranch_update_seq_tree(hdf5_in,hdf5_out,seq,window_branch,comp,verbose)
+        print('reprocessing seq %s'%seq[list(seq.keys())[0]])
+        if tree:
+            if end_clean:
+                sample = hdf5_in.rsplit('/')[-1].rsplit('.')[0]
+                hdf5_temp = '/'.join(hdf5_in.rsplit('/')[:-1])+'/seqs/%s.temp.%s.hdf5'%(sample,seq[list(seq.keys())[0]])
+                print('generating intermediate file %s'%hdf5_temp)
+                hfm.HFM().clean_end_seq(hdf5_in,hdf5_temp,seq,comp,10,verbose)
+                hfm.HFM().rebranch_update_seq_tree(hdf5_temp,hdf5_out,seq,window_branch,comp,verbose)
+            else:
+                print('recalculating seq %s updates'%seq[list(seq.keys())[0]])
+                hfm.HFM().rebranch_update_seq_tree(hdf5_in,hdf5_out,seq,window_branch,comp,verbose)
     except Exception as E:
         result = str(E)
         pass
@@ -199,7 +210,7 @@ elif type(hdf5_path)==list:
             for seq in S: #|| on seq
                 hdf5_out = args.out_dir+'/seqs/%s.%s.hdf5'%(base_name,seq[list(seq.keys())[0]])
                 p1.apply_async(reprocess_seq,
-                               args=(hdf5_in,hdf5_out,seq,w_b,True,comp,True),
+                               args=(hdf5_in,hdf5_out,seq,w_b,True,end_clean,comp,True),
                                callback=collect_results)
                 time.sleep(0.25)
             p1.close()
