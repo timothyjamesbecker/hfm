@@ -183,13 +183,15 @@ if type(hdf5_path)==str:
                     time.sleep(0.25)
             p1.close()
             p1.join()
+            print('finished processing individual seqs')
             if all([l['result']=='' for l in result_list]) and len(glob.glob(hdf5_path + '/seqs/*.hdf5')) >= len(S):
+                print('merging and cleaning intermediary files')
                 print(subprocess.check_output(' '.join(['rm',args.out_dir+'/seqs/*temp*.hdf5']),shell=True))
                 hfm.merge_seqs(hdf5_path+'/seqs/',hdf5_out) #merge the files
-                print(subprocess.check_output(['rm','-rf',hdf5_path+'/seqs/'])) #delete the seperate files
+                print(subprocess.check_output(' '.join(['rm','-rf',hdf5_path+'/seqs/']),shell=True)) #delete the seperate files
             else:
                 s = ''
-                for l in result_list: s += l['result']
+                for l in result_list: s += l['result']+'\n'
                 with open(base_name+'.error','w') as f: f.write(s)
             t_stop = time.time()
             print('sample %s || cython with %s cpus in %s sec'%(base_name,cpus,t_stop-t_start))
