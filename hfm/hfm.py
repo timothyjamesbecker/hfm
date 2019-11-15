@@ -76,6 +76,35 @@ def get_hdf5_map(hdf5_path):
                         S[sm][rg][seq][trk][ftr] = sorted(list(f[sm][rg][seq][trk][ftr].keys()),key=lambda x: int(x))
     return S
 
+def get_hdf5_windows(hdf5_path,check=True):
+        W,same = {},{}
+        if os.path.exists(hdf5_path):
+            if check: print('checking file %s'%hdf5_path)
+            f = File(hdf5_path,'r')
+            if len(f.keys())>0:
+                sm = list(f.keys())[0]
+                if len(f[sm].keys())>0:
+                    if check: print('found sm %s'%sm)
+                    rg = list(f[sm].keys())[0]
+                    if len(f[sm][rg].keys())>0:
+                        for seq in f[sm][rg]:
+                            if seq not in W: W[seq] = []
+                            if len(f[sm][rg][seq].keys())>0:
+                                trk = list(f[sm][rg][seq].keys())[0]
+                                if len(f[sm][rg][seq][trk].keys())>0:
+                                    ftr = list(f[sm][rg][seq][trk].keys())[0]
+                                    if len(f[sm][rg][seq][trk][ftr].keys())>0:
+                                        if len(W[seq])<=0: W[seq] = sorted([int(x) for x in list(f[sm][rg][seq][trk][ftr].keys())])
+                                        w = sorted([int(x) for x in list(f[sm][rg][seq][trk][ftr].keys())])
+                                        if check and w!=W[seq]: same[(rg,seq,trk,ftr)] = w
+            f.close()
+            if check and len(same)>0:
+                W = []
+                print('non-uniform window lengths detected at [sm][rg][seq][trk][ftr] level:%s\n'%same)
+            elif check and len(same)<=0:
+                print('all window lengths for sm %s are equal'%sm)
+        return W
+
 #given a bunch of hdf5s done in ||, merge into one
 #may have to midfiy for multi window version...
 def merge_seqs(hdf5_dir, hdf5_out):
@@ -120,13 +149,13 @@ def merge_samples(hdf5_dir,hdf5_out):
     out_f.close()
     return True
 
-
 #main sequence alignment feature extraction class  
 #add some metadata information about the sequencing platform PL
 #add some metadata information abut the type of data: WGS, WES, RNA-seq, CHIAPET, etc... 
 class HFM:
     def __init__(self,window=int(1E2),window_branch=0,window_root=0,chunk=int(1E6),max_depth=int(1E4),
-                 bins=None,tile=True,fast=True,linear=False,compression='gzip',ratio=9):
+                 bins=None,tile=True,fast=True,linear=False,compression='gzip',ratio=9,
+                 fr_path=None,gw_path=None):
         self.__max_depth__     = np.uint32(max_depth)     #saturate counts after this value
         self.__window__        = np.uint32(window)        #base window size
         self.__window_branch__ = np.uint32(window_branch) #branch factor each level
@@ -649,18 +678,18 @@ class HFM:
         if os.path.exists(hdf5_path):
             f = File(hdf5_path,'r')
             if len(f.keys())>0:
-                sm = f.keys()[0]
+                sm = list(f.keys())[0]
                 if len(f[sm].keys())>0:
-                    rg = f[sm].keys()[0]
+                    rg = list(f[sm].keys())[0]
                     if len(f[sm][rg].keys())>0:
-                        seq = f[sm][rg].keys()[0]
+                        seq = list(f[sm][rg].keys())[0]
                         if len(f[sm][rg][seq].keys())>0:
-                            trk = f[sm][rg][seq].keys()[0]
+                            trk = list(f[sm][rg][seq].keys())[0]
                             if len(f[sm][rg][seq][trk].keys())>0:
-                                ftr = f[sm][rg][seq][trk].keys()[0]
-                                if len(f[sm][rg][seq][trk][ftr].keys()[0])>0:
-                                    w = sorted([int(x) for x in f[sm][rg][seq][trk][ftr].keys()])[0]
-                                    A = {x[0]:x[1] for x in f[sm][rg][seq][trk][ftr][str(w)].attrs.iteritems()}
+                                ftr = list(f[sm][rg][seq][trk].keys())[0]
+                                if len(f[sm][rg][seq][trk][ftr].keys())>0:
+                                    w = sorted([int(x) for x in list(f[sm][rg][seq][trk][ftr].keys())])[0]
+                                    A = dict(f[sm][rg][seq][trk][ftr][str(w)].attrs)
             f.close()
         return A
 
@@ -1067,12 +1096,10 @@ class HFM:
     #:::TO DO::: TRANSFORMATION COULD BE DONE IN CORE, OR MANY CAN BE DONE ON CLIENT/APPLICATION-SIDE
 
     #-------------------------------------------------------------------------------------------------------------------
-    #:::TO DO::: buffer methods can be rewritten to achieve a IGV stype API or other: sm,rg,seq,track,feature,start,stop
-    #-------------------------------------------------------------------------------------------------------------------
-    #select entries from the hdf5 store and buffer into memory
-    #seq would match the self.__seq__ value and you could check
-    #:::TO DO::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-    def buffer_chunk(self,hdf5_path,seq,start,end,sms='all',rgs='all',tracks='all',features='all',windows='all',verbose=False):
+    #returns buffer data attached to self.__buffer__[sm][rg][seq][trk][ftr][w]
+    def buffer_chunk(self,hdf5_path,seq,start,end,
+                     sms='all',rgs='all',tracks='all',features='all',windows='all',
+                     verbose=False):
         C = {}
         if os.path.exists(hdf5_path):
             self.f = File(hdf5_path, 'r')
@@ -1196,6 +1223,20 @@ class HFM:
         else:
             print('hdf5_path = %s was not found.'%hdf5_path)
             return False
+        return True
+
+    #slow performance should just use json.dumps(default=handler) instead...
+    def buffer_chunk_json(self,hdf5_path,seq,start,end,
+                          sms='all',rgs='all',tracks='all',features='all',windows='all',
+                          verbose=False):
+        self.buffer_chunk(hdf5_path,seq,start,end,sms=sms,rgs=rgs,tracks=tracks,features=features,verbose=verbose)
+        for sm in self.__buffer__:
+            for rg in self.__buffer__[sm]:
+                for seq in self.__buffer__[sm][rg]:
+                    for trk in self.__buffer__[sm][rg][seq]:
+                        for ftr in self.__buffer__[sm][rg][seq][trk]:
+                            for w in self.__buffer__[sm][rg][seq][trk][ftr]:
+                                self.__buffer__[sm][rg][seq][trk][ftr][w] = self.__buffer__[sm][rg][seq][trk][ftr][w].tolist()
         return True
 
     #:::TO DO::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
