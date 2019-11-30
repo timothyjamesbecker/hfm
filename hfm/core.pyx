@@ -153,7 +153,233 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
         C['mapq_dis'][rg] = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
         C['tlen_dis'][rg] = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
     return C
-    
+
+#[0] utilities
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+def LRF_1D(list C1, list C2):
+    cdef long n1,n2,j1,j2,upper
+    cdef list I,U,D1,D2
+    j1,j2,upper = 0,0,0         #initializations and padding
+    n1,n2 = len(C1)+1,len(C2)+1 #boundries here
+    I,U,  = [[-2,-2]],[[-2,-2]]
+    D1,D2 = [[-2,-2]],[[-2,-2]]
+    if n1 > 1 and n2 > 1:
+        upper = max(C1[-1][1],C2[-1][1])
+        C1 += [[upper+2,upper+2],[upper+4,upper+4]] #pad out the end of C1
+        C2 += [[upper+2,upper+2],[upper+4,upper+4]] #pad out the end of C2
+        while j1+j2 < n1+n2:  #pivioting dual ordinal indecies scan left to right on C1, C2
+            a = C1[j1][0]-C2[j2][0]
+            b = C1[j1][0]-C2[j2][1]
+            c = C1[j1][1]-C2[j2][0]
+            d = C1[j1][1]-C2[j2][1]
+            if    C1[j1][0:2]==C2[j2][0:2]: #[7] c1 and c2 are equal on x
+                orientation_7(C1,j1,C2,j2,I,U,D1,D2)
+                j1 += 1
+                j2 += 1
+            elif  c<0:                      #[1] c1 disjoint of left of c2
+                orientation_1(C1,j1,C2,j2,I,U,D1,D2)
+                j1 += 1
+            elif  b>0:                      #[6] c1 disjoint right of c2
+                orientation_6(C1,j1,C2,j2,I,U,D1,D2)
+                j2 += 1
+            elif  a<0 and d<0:              #[2] c1 right overlap to c2 left no envelopment
+                orientation_2(C1,j1,C2,j2,I,U,D1,D2)
+                j1 += 1
+            elif  a>0 and d>0:              #[4] c1 left overlap of c2 right no envelopment
+                orientation_4(C1,j1,C2,j2,I,U,D1,D2)
+                j2 += 1
+            elif  a<=0 and d>=0:            #[3] c1 envelopment of c2
+                orientation_3(C1,j1,C2,j2,I,U,D1,D2)
+                j2 += 1
+            elif  a>=0 and d<=0:            #[5] c1 enveloped by c2
+                orientation_5(C1,j1,C2,j2,I,U,D1,D2)
+                j1 += 1
+            if j1>=n1: j1,j2 = n1,j2+1 #sticky indecies wait for eachother
+            if j2>=n2: j2,j1 = n2,j1+1 #sticky indecies wait for eachother
+        #pop off extras for each features (at most two at the end)
+        while len(C1) > 0 and C1[-1][0] > upper:  C1.pop()
+        while len(C2) > 0 and C2[-1][0] > upper:  C2.pop()
+        while len(I)  > 0 and I[-1][0]>upper:      I.pop()
+        if len(I) > 0 and I[-1][1]>upper:         I[-1][1] = upper
+        while len(U) > 0 and U[-1][0]>upper:      U.pop()
+        if len(U) > 0 and U[-1][1]>upper:         U[-1][1] = upper
+        while len(D1) > 0 and D1[-1][0]>upper:    D1.pop()
+        if len(D1) > 0 and D1[-1][1]>upper:       D1[-1][1] = min(C2[-1][0]-1,C1[-1][1])
+        while len(D2) > 0 and D2[-1][0]>upper:    D2.pop()
+        if len(D2) > 0 and D2[-1][1]>upper:       D2[-1][1] = min(C1[-1][0]-1,C2[-1][1])
+    else:
+        if   n1==1:
+            if n2>1: U,D2 = U+C2,D2+C2
+        elif n2==1:
+            if n1>1: U,D1 = U+C1,D1+C1
+    return I[1:],U[1:],D1[1:],D2[1:]
+
+#[1] c1 disjoint of left of c2
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+cdef void orientation_1(list C1,long j1,list C2,long j2,list I,list U,list D1,list D2):
+    #[i]----------------------[i] #no intersection
+    #[u]----------------------[u]
+    if U[-1][1]+1 >= C1[j1][0]:
+        U[-1][1] = C1[j1][1]
+    else:
+        U += [[C1[j1][0],C1[j1][1]]]
+    #[d1]--------------------[d1]
+    if D1[-1][1]+1 >= C1[j1][0]:  #extend segment
+        if D1[-1][1]+1!=C2[j2-1][0]:
+            D1[-1][1] = C1[j1][1]
+    else:                         #new segment
+        D1 += [[C1[j1][0],C1[j1][1]]]
+    #[d2]--------------------[d2] #no set two difference
+
+#[2] c1 right overlap to c2 left no envelopment
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+cdef void orientation_2(list C1,long j1,list C2,long j2,list I,list U,list D1,list D2):
+    #[i]----------------------[i]
+    if I[-1][1]+1 >= C2[j2][0]:
+        I[-1][1] = C1[j1][1] #was C2[j2][1]
+    else:
+        I += [[C2[j2][0],C1[j1][1]]]
+    #[u]----------------------[u]
+    if U[-1][1]+1 >= C1[j1][0]:
+        U[-1][1] = C2[j2][1]
+    else:
+        U += [[C1[j1][0],C2[j2][1]]]
+    #[d1]--------------------[d1]
+    if D1[-1][1]+1 >= C1[j1][0]:
+        D1[-1][1] = C1[j1][1]
+        if D1[-1][1] > C2[j2][0]-1:
+            D1[-1][1] = C2[j2][0]-1
+            if D1[-1][1] < D1[-1][0]: D1.pop()
+    else:
+        D1 += [[C1[j1][0],C2[j2][0]-1]]
+    #[d2]--------------------[d2]
+    D2 += [[C1[j1][1]+1,C2[j2][1]]]
+
+#[3] c1 envelopment of c2
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+cdef void orientation_3(list C1,long j1,list C2,long j2,list I,list U,list D1,list D2):
+    #[i]----------------------[i]
+    if I[-1][1]+1 >= C2[j2][0]:
+        I[-1][1] = C2[j2][1]
+    else:
+        I += [[C2[j2][0],C2[j2][1]]]
+    #[u]----------------------[u]
+    if U[-1][1]+1 >= C1[j1][0]:
+        U[-1][1] = C1[j1][1]
+    else:
+        U += [[C1[j1][0],C1[j1][1]]]
+    #[d1]--------------------[d1]
+    if D1[-1][1]+1 >= C1[j1][0]:
+        D1[-1][1] = C2[j2][0]-1
+        if C2[j2][1] < C1[j1][1]:
+            D1 += [[C2[j2][1]+1,C1[j1][1]]]
+    elif D1[-1][1] >= C2[j2][0]:
+        D1[-1][1] = C2[j2][0]-1
+        if C2[j2][1] < C1[j1][1]:  #has a right side
+            D1 += [[C2[j2][1]+1,C1[j1][1]]]
+    else:
+        if C1[j1][0] < C2[j2][0]:  #has a left side
+            D1 += [[C1[j1][0],C2[j2][0]-1]]
+        if C2[j2][1] < C1[j1][1]:  #has a right side
+            D1 += [[C2[j2][1]+1,C1[j1][1]]]
+
+
+#[4] c1 left overlap of c2 right no envelopment
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+cdef void orientation_4(list C1,long j1,list C2,long j2,list I,list U,list D1,list D2):
+    #[i]----------------------[i]
+    if I[-1][1]+1 >= C1[j1][0]:
+        I[-1][1] = C2[j2][1]
+    else:
+        I += [[C1[j1][0],C2[j2][1]]]
+    #[u]----------------------[u]
+    if U[-1][1]+1 >= C2[j2][0]:
+        U[-1][1] = C1[j1][1]
+    else:
+        U += [[C2[j2][0],C1[j1][1]]]
+    #[d1]--------------------[d1]
+    D1 += [[C2[j2][1]+1,C1[j1][1]]]
+    #[d2]--------------------[d2]
+    if D2[-1][1]+1 >= C2[j2][0]:
+        D2[-1][1] = C2[j2][1]
+        if D2[-1][1] > C1[j1][0]-1:
+            D2[-1][1] = C1[j1][0]-1
+            if D2[-1][1] < D2[-1][0]: D2.pop()
+    else:
+        D2 += [[C2[j2][0],C1[j1][0]-1]]
+
+
+#[5] c1 enveloped by c2
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+cdef void orientation_5(list C1,long j1,list C2,long j2,list I,list U,list D1,list D2):
+    #[i]----------------------[i]
+    if I[-1][1]+1 >= C1[j1][0]:
+        I[-1][1] = C1[j1][1]
+    else:
+        I += [[C1[j1][0],C1[j1][1]]]
+
+    #[u]----------------------[u]
+    if U[-1][1]+1 >= C2[j2][0]:
+        U[-1][1] = C2[j2][1]
+    else:
+        U += [[C2[j2][0],C2[j2][1]]]
+    #[d1]--------------------[d1] #no set one difference
+    #[d2]--------------------[d2]
+    if D2[-1][1]+1 >= C2[j2][0]:
+        D2[-1][1] = C1[j1][0]-1
+        if C1[j1][1] < C2[j2][1]:
+            D2 += [[C1[j1][1]+1,C2[j2][1]]]
+    elif D2[-1][1] >= C1[j1][0]:
+        D2[-1][1] = C1[j1][0]-1
+        if C1[j1][1] < C2[j2][1]:  #has a right side
+            D2 += [[C1[j1][1]+1,C2[j2][1]]]
+    else:
+        if C2[j2][0] < C1[j1][0]:  #has a left side
+            D2 += [[C2[j2][0],C1[j1][0]-1]]
+        if C1[j1][1] < C2[j2][1]:  #has a right side
+            D2 += [[C1[j1][1]+1,C2[j2][1]]]
+
+#[6] c1 disjoint right of c2
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+cdef void orientation_6(list C1,long j1,list C2,long j2,list I,list U,list D1,list D2):
+    #[i]----------------------[i] #no instersection
+    if U[-1][1]+1 >= C2[j2][0]:
+        U[-1][1] = C2[j2][1]
+    else:
+        U += [[C2[j2][0],C2[j2][1]]]
+    #[d1]--------------------[d1] #no set one difference
+    #[d2]--------------------[d2]
+    if D2[-1][1]+1 >= C2[j2][0]:
+        if D2[-1][1]+1!=C1[j1-1][0]:
+            D2[-1][1] = C2[j2][1]
+    else:
+        D2 += [[C2[j2][0],C2[j2][1]]]
+
+#[7] c1 and c2 are equal on x
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+cdef void orientation_7(list C1,long j1,list C2,long j2,list I,list U,list D1,list D2):
+    #[i]----------------------[i]
+    if I[-1][1]+1 >= C1[j1][0]:
+        I[-1][1] = C1[j1][1]
+    else:
+        I += [[C1[j1][0],C1[j1][1]]]
+
+    #[u]----------------------[u]
+    if U[-1][1]+1 >= C1[j1][0]:
+        U[-1][1] = C1[j1][1]
+    else:
+        U += [[C1[j1][0],C1[j1][1]]]
+    #[d1]----------------------[d1]
+    #[d2]----------------------[d2]
+
 #[I]------------statistical features--------------------[I]#
 #notes: median and entropy are removed for now
 #median can be estimated from the hist (if linear...)

@@ -105,6 +105,23 @@ def get_hdf5_windows(hdf5_path,check=True):
                 print('all window lengths for sm %s are equal'%sm)
         return W
 
+def get_hdf5_attrs(hdf5_path):
+    S = {}
+    f = File(hdf5_path,'r')
+    for sm in f:
+        S[sm] = {}
+        for rg in f[sm]:
+            S[sm][rg] = {}
+            for seq in f[sm][rg]:
+                S[sm][rg][seq] = {}
+                trk = list(f[sm][rg][seq].keys())[0]
+                ftr = list(f[sm][rg][seq][trk].keys())[0]
+                for w in f[sm][rg][seq][trk][ftr]:
+                    S[sm][rg][seq][w] = {}
+                    for k in f[sm][rg][seq][trk][ftr][w].attrs.keys():
+                        S[sm][rg][seq][w][k] = f[sm][rg][seq][trk][ftr][w].attrs[k]
+    return S
+
 #given a bunch of hdf5s done in ||, merge into one
 #may have to midfiy for multi window version...
 def merge_seqs(hdf5_dir, hdf5_out):
@@ -1295,6 +1312,53 @@ class HFM:
             #:::TO DO:::
             print('not implemented yet..')
         return True
+
+    #given an hdf5 file, generate a dict of zero coordinates using the smallest windows...
+    def get_maxima_regions(self,hdf5_paths,lower_cut=0.1,upper_cut=1000.0,min_w=500):
+        R,I = {},{}
+        if type(hdf5_paths) is not list: hdf5_paths = [hdf5_paths]
+        for hdf5_path in hdf5_paths:
+            A = get_hdf5_attrs(hdf5_path)
+            for sm in A:
+                R[sm] = {}
+                for rg in A[sm]:
+                    R[sm][rg] = {}
+                    for seq in A[sm][rg]:
+                        R[sm][rg][seq] = []
+                        w = int(sorted(list(A[sm][rg][seq].keys()),key=lambda x: int(x))[0])
+                        l = A[sm][rg][seq][str(w)]['len']
+                        m = A[sm][rg][seq][str(w)]['M1']
+                        self.buffer_chunk(hdf5_path,seq=seq,start=0,end=l,
+                                          sms=[sm],rgs=[rg],tracks=['total'],
+                                          features=['moments'],windows=[str(w)])
+                        data = self.__buffer__
+                        mmts = data[sm][rg][seq]['total']['moments'][str(w)]
+                        i = 0
+                        while i < len(mmts):
+                            j = i
+                            while j < len(mmts) and (mmts[j][m]<lower_cut or mmts[j][m]>upper_cut): j += 1
+                            if i<j: R[sm][rg][seq] += [[w*i,w*j]]
+                            i = j+1
+                        if len(R[sm][rg][seq])>0 and R[sm][rg][seq][-1][1]>l: R[sm][rg][seq][-1][1]=l
+                        self.__buffer__ = None
+        sms = sorted(list(R.keys()))
+        rg = list(R[sms[0]].keys())[0]
+        I = {}
+        for seq in R[sms[0]][rg]: I[seq] = R[sms[0]][rg][seq]
+        for i in range(len(R)):
+            for rg in R[sms[i]]:
+                for seq in R[sms[i]][rg]:
+                    I[seq] = core.LRF_1D(I[seq],R[sms[i]][rg][seq])[0]
+        R = []
+        for seq in I:
+            T = []
+            for i in range(len(I[seq])): #[1] filter ranges that are too small
+                if I[seq][i][1]-I[seq][i][0] >= min_w: T += [I[seq][i]]
+            I[seq] = T
+            for i in range(len(I[seq])-1):
+                if I[seq][i+1][0]-I[seq][i][1] <= min_w: I[seq][i][1] += min_w
+            I[seq] = core.LRF_1D(I[seq],I[seq])[1] #union of the gap extended sections
+        return I
 
     #feature access from the container here-----------------------
     def window_range(self,f,normalized=False):
