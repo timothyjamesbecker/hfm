@@ -12,6 +12,7 @@ import ctypes
 from h5py import File
 import math
 import glob
+import time
 import numpy as np
 import multiprocessing as mp
 import pysam
@@ -1314,16 +1315,18 @@ class HFM:
         return True
 
     #given an hdf5 file, generate a dict of zero coordinates using the smallest windows...
-    def get_maxima_regions(self,hdf5_paths,lower_cut=0.1,upper_cut=1000.0,min_w=500):
+    def get_maxima_regions(self,hdf5_paths,lower_cut=0.1,upper_cut=1000.0,min_w=500,verbose=True):
         R,I = {},{}
         if type(hdf5_paths) is not list: hdf5_paths = [hdf5_paths]
         for hdf5_path in hdf5_paths:
+            if verbose: print('generating maxima ranges for %s'%hdf5_path.rsplit('/')[-1])
             A = get_hdf5_attrs(hdf5_path)
             for sm in A:
                 R[sm] = {}
                 for rg in A[sm]:
                     R[sm][rg] = {}
                     for seq in A[sm][rg]:
+                        start = time.time()
                         R[sm][rg][seq] = []
                         w = int(sorted(list(A[sm][rg][seq].keys()),key=lambda x: int(x))[0])
                         l = A[sm][rg][seq][str(w)]['len']
@@ -1341,6 +1344,8 @@ class HFM:
                             i = j+1
                         if len(R[sm][rg][seq])>0 and R[sm][rg][seq][-1][1]>l: R[sm][rg][seq][-1][1]=l
                         self.__buffer__ = None
+                        stop = time.time()
+                        if verbose: print('processed sm=%s rg=%s seq%s in %s secs'%(sm,rg,seq,round(stop-start,2)))
         sms = sorted(list(R.keys()))
         rg = list(R[sms[0]].keys())[0]
         I = {}
@@ -1349,6 +1354,7 @@ class HFM:
             for rg in R[sms[i]]:
                 for seq in R[sms[i]][rg]:
                     I[seq] = core.LRF_1D(I[seq],R[sms[i]][rg][seq])[0]
+        if verbose: print('intersecting, extending and filtering ranges across samples:%s'%sorted(list(R.keys())))
         R = []
         for seq in I:
             T = []
@@ -1358,6 +1364,7 @@ class HFM:
             for i in range(len(I[seq])-1):
                 if I[seq][i+1][0]-I[seq][i][1] <= min_w: I[seq][i][1] += min_w
             I[seq] = core.LRF_1D(I[seq],I[seq])[1] #union of the gap extended sections
+            if verbose: print('%s intersected, extended, ranges passed filters for seq=%s'%(len(I[seq]),seq))
         return I
 
     #feature access from the container here-----------------------
