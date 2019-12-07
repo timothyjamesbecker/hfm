@@ -10,10 +10,13 @@
 import os
 import ctypes
 from h5py import File
+import json
 import math
 import glob
 import time
+import itertools as it
 import numpy as np
+from scipy import signal
 import multiprocessing as mp
 import pysam
 import core
@@ -1315,57 +1318,225 @@ class HFM:
         return True
 
     #given an hdf5 file, generate a dict of zero coordinates using the smallest windows...
-    def get_maxima_regions(self,hdf5_paths,lower_cut=0.1,upper_cut=1000.0,min_w=500,verbose=True):
-        R,I = {},{}
-        if type(hdf5_paths) is not list: hdf5_paths = [hdf5_paths]
-        for hdf5_path in hdf5_paths:
-            if verbose: print('generating maxima ranges for %s'%hdf5_path.rsplit('/')[-1])
-            A = get_hdf5_attrs(hdf5_path)
-            for sm in A:
-                R[sm] = {}
-                for rg in A[sm]:
-                    R[sm][rg] = {}
-                    for seq in A[sm][rg]:
-                        start = time.time()
-                        R[sm][rg][seq] = []
-                        w = int(sorted(list(A[sm][rg][seq].keys()),key=lambda x: int(x))[0])
-                        l = A[sm][rg][seq][str(w)]['len']
-                        m = A[sm][rg][seq][str(w)]['M1']
-                        self.buffer_chunk(hdf5_path,seq=seq,start=0,end=l,
-                                          sms=[sm],rgs=[rg],tracks=['total'],
-                                          features=['moments'],windows=[str(w)])
-                        data = self.__buffer__
-                        mmts = data[sm][rg][seq]['total']['moments'][str(w)]
-                        i = 0
-                        while i < len(mmts):
-                            j = i
-                            while j < len(mmts) and (mmts[j][m]<lower_cut or mmts[j][m]>upper_cut): j += 1
-                            if i<j: R[sm][rg][seq] += [[w*i,w*j]]
-                            i = j+1
-                        if len(R[sm][rg][seq])>0 and R[sm][rg][seq][-1][1]>l: R[sm][rg][seq][-1][1]=l
-                        self.__buffer__ = None
-                        stop = time.time()
-                        if verbose: print('processed sm=%s rg=%s seq%s in %s secs'%(sm,rg,seq,round(stop-start,2)))
-        sms = sorted(list(R.keys()))
-        rg = list(R[sms[0]].keys())[0]
-        I = {}
-        for seq in R[sms[0]][rg]: I[seq] = R[sms[0]][rg][seq]
-        for i in range(len(R)):
-            for rg in R[sms[i]]:
-                for seq in R[sms[i]][rg]:
-                    I[seq] = core.LRF_1D(I[seq],R[sms[i]][rg][seq])[0]
-        if verbose: print('intersecting, extending and filtering ranges across samples:%s'%sorted(list(R.keys())))
-        R = []
-        for seq in I:
-            T = []
-            for i in range(len(I[seq])): #[1] filter ranges that are too small
-                if I[seq][i][1]-I[seq][i][0] >= min_w: T += [I[seq][i]]
-            I[seq] = T
-            for i in range(len(I[seq])-1):
-                if I[seq][i+1][0]-I[seq][i][1] <= min_w: I[seq][i][1] += min_w
-            I[seq] = core.LRF_1D(I[seq],I[seq])[1] #union of the gap extended sections
-            if verbose: print('%s intersected, extended, ranges passed filters for seq=%s'%(len(I[seq]),seq))
+    def get_maxima_regions(self,hdf5_paths,out_dir=None,lower_cut=0.1,upper_cut=1000.0,min_w=500,verbose=True):
+        if out_dir is not None and os.path.exists(out_dir+'/sms.maxima.json'):
+            with open(out_dir+'/sms.maxima.json','r') as f:
+                I = json.load(f)
+        else:
+            R,I = {},{}
+            if type(hdf5_paths) is not list: hdf5_paths = [hdf5_paths]
+            for hdf5_path in hdf5_paths:
+                if verbose: print('generating maxima ranges for %s'%hdf5_path.rsplit('/')[-1])
+                A = get_hdf5_attrs(hdf5_path)
+                for sm in A:
+                    R[sm] = {}
+                    for rg in A[sm]:
+                        R[sm][rg] = {}
+                        for seq in A[sm][rg]:
+                            start = time.time()
+                            R[sm][rg][seq] = []
+                            w = int(sorted(list(A[sm][rg][seq].keys()),key=lambda x: int(x))[0])
+                            l = A[sm][rg][seq][str(w)]['len']
+                            m = A[sm][rg][seq][str(w)]['M1']
+                            self.buffer_chunk(hdf5_path,seq=seq,start=0,end=l,
+                                              sms=[sm],rgs=[rg],tracks=['total'],
+                                              features=['moments'],windows=[str(w)])
+                            data = self.__buffer__
+                            mmts = data[sm][rg][seq]['total']['moments'][str(w)]
+                            i = 0
+                            while i < len(mmts):
+                                j = i
+                                while j < len(mmts) and (mmts[j][m]<lower_cut or mmts[j][m]>upper_cut): j += 1
+                                if i<j: R[sm][rg][seq] += [[w*i,w*j]]
+                                i = j+1
+                            if len(R[sm][rg][seq])>0 and R[sm][rg][seq][-1][1]>l: R[sm][rg][seq][-1][1]=l
+                            self.__buffer__ = None
+                            stop = time.time()
+                            if verbose: print('processed sm=%s rg=%s seq%s in %s secs'%(sm,rg,seq,round(stop-start,2)))
+            sms = sorted(list(R.keys()))
+            rg = list(R[sms[0]].keys())[0]
+            I = {}
+            for seq in R[sms[0]][rg]: I[seq] = R[sms[0]][rg][seq]
+            for i in range(len(R)):
+                for rg in R[sms[i]]:
+                    for seq in R[sms[i]][rg]:
+                        I[seq] = core.LRF_1D(I[seq],R[sms[i]][rg][seq])[0]
+            if verbose: print('intersecting, extending and filtering ranges across samples:%s'%sorted(list(R.keys())))
+            R = []
+            for seq in I:
+                T = []
+                for i in range(len(I[seq])): #[1] filter ranges that are too small
+                    if I[seq][i][1]-I[seq][i][0] >= min_w: T += [I[seq][i]]
+                I[seq] = T
+                for i in range(len(I[seq])-1):
+                    if I[seq][i+1][0]-I[seq][i][1] <= min_w: I[seq][i][1] += min_w
+                I[seq] = core.LRF_1D(I[seq],I[seq])[1] #union of the gap extended sections
+                if verbose: print('%s intersected, extended, ranges passed filters for seq=%s'%(len(I[seq]),seq))
+            if out_dir is not None:
+                if not os.path.exists(out_dir): os.mkdir(out_dir)
+                with open(out_dir+'/sms.maxima.json','w') as f:
+                    json.dump(I,f)
         return I
+
+    #given an hdf5 default file, standardizes M1,M2,M3,M4 and decorreletas total from GC to derive the RD signal
+    #then writes smaller hdf5 file to hdf5 out file where coordinate based sampling can then occur
+    #tracks are the final tracks selected, mask is a set of {seq:[start,end] regiond, coords is {seq:[start,end] regions
+    #hsdf5_out_path will be file://sm/rg/label/cid
+    def preprocess_tracks(self,hdf5_in_path,tracks,mask,coords,hdf5_out_path,
+                          decorrelate=True,normalize=False,verbose=True):
+        C = {}
+        A = get_hdf5_attrs(hdf5_in_path)
+        for sm in A:
+            C[sm] = {}
+            for rg in A[sm]:
+                C[sm][rg] = {}
+                for seq in A[sm][rg]:
+                    start = time.time()
+                    C[sm][rg][seq],data = {},{}
+                    w = int(sorted(list(A[sm][rg][seq].keys()), key=lambda x: int(x))[0])
+                    l = A[sm][rg][seq][str(w)]['len']
+                    self.buffer_chunk(hdf5_in_path,seq,0,l,sms=[sm],rgs=[rg],features=['moments'],windows=[str(w)])
+                    for k in self.__buffer__[sm][rg][seq]:
+                        data[k] = core.standardized_moments(self.__buffer__[sm][rg][seq][k]['moments'][str(w)])
+                    #remove the mask windows from the full set using LRF rev-difference function
+                    neg,pos,idx = [list(x) for x in np.asarray(mask[seq])/w],[[0,l/w]],[]
+                    for x in core.LRF_1D(neg,pos)[3]: idx += range(x[0],x[1]+1,1)
+                    for k in data: data[k] = data[k][idx,:]
+                    #cross-correlation filter---------------------------------------------------
+                    kernel,kernel_function,track,bias = 16,'lin','primary','GC'
+                    if u'RD' not in tracks: tracks += [u'RD']
+                    data[u'RD'] = np.zeros(data[track].shape,dtype=np.float64)
+                    #kernel weights----------------------------------------------
+                    if kernel_function=='exp':   kernel_ws = np.exp(range(0,kernel)+[kernel]+range(0,kernel)[::-1])
+                    elif kernel_function=='lin': kernel_ws = range(0,kernel)+[kernel]+range(0,kernel)[::-1]
+                    elif kernel_function=='log': kernel_ws = np.log1p(range(0,kernel)+[kernel]+range(0,kernel)[::-1])
+                    else:                        kernel_ws = [1 for x in range(2*kernel+1)]
+                    min_k,max_k = np.min(kernel_ws),np.max(kernel_ws)
+                    kernel_ws -= min_k
+                    kernel_ws /= max_k
+                    # kernel weights----------------------------------------------
+
+                    for d in range(data[track].shape[1]):
+                        sig  = data[track][:,d]/(1.0+data[bias][:,d])
+                        min_s,max_s = np.min(sig),np.max(sig)
+                        min_t,max_t = np.min(data[track][:,d]),np.max(data[track][:,d])
+                        sig -= min_s
+                        sig /= max_s-min_s
+                        sig *= max_t-min_t
+                        sig += min_t
+                        for i in range(kernel,len(sig)-kernel-1,1):
+                            data[u'RD'][i,d] = np.average(sig[i-kernel:i+kernel+1],weights=kernel_ws)
+
+                    #signal processing filters--------------------------------------------------
+                    data[u'WD'] = np.copy(data[u'primary'])
+                    sig = np.copy(data[u'RD'])                                     # intial copy
+                    mins,maxs = {},{}
+                    for d in range(sig.shape[1]):
+                        mins[d],maxs[d] = np.min(sig[:,d]),np.max(sig[:,d])        # scale into
+                        sig[:,d] -= mins[d]                                        # [0,1]
+                        sig[:,d] /= maxs[d]-mins[d]                                # range, then into
+                    x = int(math.floor(math.pow(data['RD'].shape[0],0.5)))
+                    sig = np.reshape(sig[:x*x],(x,x,4))
+                    #filt = skimage.restoration.denoise_wavelet(sig,wavelet='haar')
+                    filt = skimage.restoration.denoise_bilateral(sig,sigma_color=0.1,sigma_spatial=15)
+                    # filt = skimage.restoration.denoise_tv_bregman(sig,weight=0.001,
+                    #                                               max_iter=500,eps=0.001,
+                    #                                               isotropic=True)
+                    filt = np.reshape(filt,(x*x,4))
+                    fmins,fmaxs = {},{}
+                    for d in range(filt.shape[1]):
+                        fmins[d],fmaxs[d] = np.min(filt[:,d]),np.max(filt[:,d])
+                        filt[:,d] -= fmins[d]
+                        filt[:,d] /= fmaxs[d]-fmins[d]
+                        filt[:,d] *= maxs[d]-mins[d]
+                        filt[:,d] += mins[d]
+                    data[u'WD'][:x*x,:] = filt[:]
+
+                    #cross-correlation filter---------------------------------------------------
+                    # data[u'RD'] = self.track_decorrelation(data,track='primary',bias='GC',
+                    #                                        kernel=2,kernel_function='exp',
+                    #                                        lower_res=True,rescale=True)
+                    # if decorrelate:
+
+                    ks = []
+                    for k in data:
+                        if k in tracks: ks += [k]
+                    ks = sorted(list(ks))
+
+                    # if normalize: data = self.track_normalize(data,[0.0,1.0])
+
+                    for i,j in it.combinations(range(len(ks)),2):
+                        i,j = sorted([i,j])
+                        C[sm][rg][seq][(i,j)] = np.zeros((data[ks[i]].shape[1],),dtype='f8')
+                        for d in range(data[ks[i]].shape[1]):
+                            C[sm][rg][seq][(i,j)][d] = np.corrcoef(data[ks[i]][:,d],data[ks[j]][:,d])[0][1]
+                    stop = time.time()
+                    if verbose: print('finished %s corr coeffs for seq=%s in %s sec'%\
+                                      (len(C[sm][rg][seq]),seq,round(stop-start,2)))
+        return C
+
+    #finds, min and max and uses that to scale to 0.0 to 1.0 range
+    def track_normalize(self,data,final=[0.0,1.0]):
+        offset,scale = final[0],final[1]-final[0]
+        ks = sorted(list(data.keys))
+        for i in range(len(ks)):
+            for d in range(data[ks[i]].shape[1]):
+                min_v   = np.min(data[ks[i]][:,d])
+                max_v   = np.max(data[ks[i]][:,d])
+                range_v = max_v-min_v
+                for j in range(data[ks[i]].shape[0]):
+                    data[ks[i]][j,d] = ((data[ks[i]][j,d]-min_v)/range_v)*scale+offset
+        return data
+
+    #if correlation between track, can decorrelate such as GC bias from total/primary alignments
+    def track_decorrelation(self,data,track='primary',bias='GC',kernel=32,kernel_function='exp',lower_res=True,rescale=False):
+        D = np.zeros(data[track].shape,dtype=np.float64)
+        for d in range(data[track].shape[1]):
+            min_v  = np.min(data[bias][:,d])
+            max_v  = np.max(data[bias][:,d])
+            med_v  = np.median(data[bias][:,d])
+            if max_v-min_v>0.0:
+                if lower_res: #use 3/4 of bins below the median value
+                    if med_v<=0.0: med_v = (max_v-min_v)/2.0
+                    bins_v = list(np.arange(min_v,2*med_v,(2*med_v-min_v)/(1.0*(kernel/2)/2.0)))+\
+                             list(np.arange(med_v+(med_v-min_v),max_v,max_v/(1.0*(kernel/2)/2.0)))+[max_v+1.0]
+                else:
+                    bins_v = np.histogram_bin_edges(data[bias][:,d],bins=kernel/2)
+                hist_v = {b:[] for b in bins_v[:-1]}
+                for i in range(len(data[bias][:,d])):
+                    for b in range(len(bins_v)-1):
+                        if data[bias][i,d]>=bins_v[b] and data[bias][i,d]<bins_v[b+1]:
+                            hist_v[bins_v[b]] += [data[bias][i,d]]
+                            break
+                for b in range(len(bins_v)-1):
+                    if len(hist_v[bins_v[b]])>0.0: hist_v[bins_v[b]] = np.mean(hist_v[bins_v[b]])
+                    else:                          hist_v[bins_v[b]] = (bins_v[b]+bins_v[b+1])/2.0
+                if kernel_function=='exp':   kernel_ws = np.exp(range(0,kernel)+[kernel]+range(0,kernel)[::-1])
+                elif kernel_function=='lin': kernel_ws = range(0,kernel)+[kernel]+range(0,kernel)[::-1]
+                elif kernel_function=='log': kernel_ws = np.log1p(range(0,kernel)+[kernel]+range(0,kernel)[::-1])
+                else:                        kernel_ws = [1 for x in range(2*kernel+1)]
+                min_k,max_k = np.min(kernel_ws),np.max(kernel_ws)
+                kernel_ws -= min_k
+                kernel_ws /= max_k
+                for i in range(kernel,len(data[track])-kernel-1,1): #smoothing filter here with width>0
+                    mu_rd_width = np.average(data[track][i-kernel:i+kernel+1,d],weights=kernel_ws)
+                    for b in range(len(bins_v)-1):
+                        if data[bias][i,d]>=bins_v[b] and data[bias][i,d]<bins_v[b+1]:
+                            mu_bin_v = hist_v[bins_v[b]]
+                            break
+                    #D[i,d] = data[track][i,d]*(mu_rd/(mu_rd if mu_bin_v<=0.0 else mu_bin_v))
+                    D[i,d] = np.average(data[track][i-kernel:i+kernel+1,d],weights=kernel_ws)*\
+                             (mu_rd_width/(mu_rd_width if mu_bin_v==0.0 else mu_bin_v))
+                if rescale:
+                    min_t,min_b   = np.min(data[track][:,d]),np.min(D[:,d])
+                    max_t,max_b   = np.max(data[track][:,d]),np.max(D[:,d])
+                    D[:,d] -= min_b
+                    D[:,d] /= max_b-min_b
+                    D[:,d] *= max_t-min_t
+                    D[:,d] += min_t
+            else:
+                D[:,d] = data[track][:,d]
+        return D
 
     #feature access from the container here-----------------------
     def window_range(self,f,normalized=False):

@@ -45,7 +45,7 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
     rg         = 'all'
     tracks = ['primary','alternate','orient_same','orient_out','orient_um','orient_chr','right_anchor','left_anchor',
               'right_clipped','left_clipped','clipped','deletion','insertion','substitution','fwd_rev_diff']   #zeros
-    values = ['total','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','GC'] #psuedo counts
+    values = ['total','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','GC','pGC','pMQ','pGM'] #psuedo counts
     if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))} #duplicated from the safe lib
     for rg in sms:
         for t in tracks:
@@ -72,8 +72,6 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             C['total'][rg][a:b] += 1.0
             C['mapq'][rg][a:b]  += mapq
             C['tlen'][rg][a:b]  += tlen
-            if len(sequence)>0:
-                C['GC'][rg][a:b] += <float>(sequence.count('G')+sequence.count('C'))/<float>(len(sequence))
             if read.is_proper_pair:
                 C['proper_pair'][rg][a:b]  += 1.0
                 C['mapq_pp'][rg][a:b]      += mapq
@@ -88,10 +86,15 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             else:                                                    C['fwd_rev_diff'][rg][a:b] -= 1.0    
             if ((read.is_reverse and read.mate_is_reverse) or\
                 (not read.is_reverse and not read.mate_is_reverse)): C['orient_same'][rg][a:b]  += 1.0
-            if ((read.is_reverse and tlen>0) or\
+            elif ((read.is_reverse and tlen>0) or\
                 (not read.is_reverse and tlen <0)):                  C['orient_out'][rg][a:b]   += 1.0
-            if read.mate_is_unmapped:                                C['orient_um'][rg][a:b]    += 1.0
+            elif read.mate_is_unmapped:                              C['orient_um'][rg][a:b]    += 1.0
             elif tid!=mid:                                           C['orient_chr'][rg][a:b]   += 1.0
+            if len(sequence)>0:
+                C['GC'][rg][a:b]  += <float>(sequence.count('G')+sequence.count('C'))/<float>(len(sequence))
+                C['pGC'][rg][a:b] += C['primary'][rg][a:b]/C['GC'][rg][a:b]
+                C['pMQ'][rg][a:b] += C['primary'][rg][a:b]/C['mapq'][rg][a:b]
+                C['pGM'][rg][a:b] += C['primary'][rg][a:b]/(C['mapq'][rg][a:b]+C['GC'][rg][a:b])
             cigar = read.cigarstring #sequence/cigar based ops-------
             #cigar op counting----------------------------------------
             last,offset,j,right_anchor,left_anchor,right_clip,left_clip = 0,0,0,False,False,False,False
@@ -138,6 +141,7 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
     if not merge_rg:
         for rg in sms:
             C['GC'][rg]       = C['GC'][rg]-1.0
+            C['pGC'][rg]      = C['pGC'][rg]-1.0
             C['mapq'][rg]     = C['mapq'][rg]/C['total'][rg]-1.0
             C['tlen'][rg]     = C['tlen'][rg]/C['total'][rg]-1.0
             C['mapq_pp'][rg]  = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
@@ -146,6 +150,7 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             C['tlen_dis'][rg] = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
     else:
         C['GC'][rg]       = C['GC'][rg]-1.0
+        C['pGC'][rg]      = C['pGC'][rg]-1.0
         C['mapq'][rg]     = C['mapq'][rg]/C['total'][rg]-1.0
         C['tlen'][rg]     = C['tlen'][rg]/C['total'][rg]-1.0
         C['mapq_pp'][rg]  = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
@@ -384,6 +389,20 @@ cdef void orientation_7(list C1,long j1,list C2,long j2,list I,list U,list D1,li
 #notes: median and entropy are removed for now
 #median can be estimated from the hist (if linear...)
 #entropy is captured to some degree by transistions...
+
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+@cython.wraparound(False)
+def standardized_moments(double[:,:] X):
+    cdef unsigned int n,i,j
+    n = len(X)
+    cdef np.ndarray[double, ndim=2] D = np.zeros([n,4],dtype=np.float64)
+    for i in range(n):
+        D[i][0] = X[i][M1]                                                                         #sample mean
+        D[i][1] = (math.pow(X[i][M2]/(X[i][N]-1),0.5) if X[i][N]>1 else 0.0)                       #sample std
+        D[i][2] = (math.pow(X[i][N],0.5)*X[i][M3]/math.pow(X[i][M2],1.5) if X[i][M2]>0.0 else 0.0) #sample skew
+        D[i][3] = (X[i][N]*X[i][M4]/(X[i][M2]*X[i][M2])-3.0 if X[i][M2]>0.0 else -3.0)             #sample kur
+    return D
 
 #F[0=n,1=sum,2=min,3=max,4=M1,5=M2,6=M3,7=M4]
 #standard 2-pass exact algorithm-----------------------------------------
