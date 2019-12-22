@@ -45,7 +45,7 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
     rg         = 'all'
     tracks = ['primary','alternate','orient_same','orient_out','orient_um','orient_chr','right_anchor','left_anchor',
               'right_clipped','left_clipped','clipped','deletion','insertion','substitution','fwd_rev_diff']   #zeros
-    values = ['total','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','GC','pGC','pMQ','pGM'] #psuedo counts
+    values = ['total','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','GC'] #psuedo counts
     if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))} #duplicated from the safe lib
     for rg in sms:
         for t in tracks:
@@ -92,9 +92,6 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             elif tid!=mid:                                           C['orient_chr'][rg][a:b]   += 1.0
             if len(sequence)>0:
                 C['GC'][rg][a:b]  += <float>(sequence.count('G')+sequence.count('C'))/<float>(len(sequence))
-                C['pGC'][rg][a:b] += C['primary'][rg][a:b]/C['GC'][rg][a:b]
-                C['pMQ'][rg][a:b] += C['primary'][rg][a:b]/C['mapq'][rg][a:b]
-                C['pGM'][rg][a:b] += C['primary'][rg][a:b]/(C['mapq'][rg][a:b]+C['GC'][rg][a:b])
             cigar = read.cigarstring #sequence/cigar based ops-------
             #cigar op counting----------------------------------------
             last,offset,j,right_anchor,left_anchor,right_clip,left_clip = 0,0,0,False,False,False,False
@@ -133,15 +130,14 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
                 if left_clip:    C['left_clipped'][rg][a:b]  += 1.0
                 if right_clip:   C['right_clipped'][rg][a:b] += 1.0
             else:
-                if left_anchor:  C['right_anchor'][rg][a:b]   += 1.0
-                if right_anchor: C['left_anchor'][rg][a:b]  += 1.0
-                if left_clip:    C['right_clipped'][rg][a:b]  += 1.0
-                if right_clip:   C['left_clipped'][rg][a:b] += 1.0
+                if left_anchor:  C['right_anchor'][rg][a:b]  += 1.0
+                if right_anchor: C['left_anchor'][rg][a:b]   += 1.0
+                if left_clip:    C['right_clipped'][rg][a:b] += 1.0
+                if right_clip:   C['left_clipped'][rg][a:b]  += 1.0
     samfile.close()
     if not merge_rg:
         for rg in sms:
             C['GC'][rg]       = C['GC'][rg]-1.0
-            C['pGC'][rg]      = C['pGC'][rg]-1.0
             C['mapq'][rg]     = C['mapq'][rg]/C['total'][rg]-1.0
             C['tlen'][rg]     = C['tlen'][rg]/C['total'][rg]-1.0
             C['mapq_pp'][rg]  = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
@@ -150,7 +146,6 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             C['tlen_dis'][rg] = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
     else:
         C['GC'][rg]       = C['GC'][rg]-1.0
-        C['pGC'][rg]      = C['pGC'][rg]-1.0
         C['mapq'][rg]     = C['mapq'][rg]/C['total'][rg]-1.0
         C['tlen'][rg]     = C['tlen'][rg]/C['total'][rg]-1.0
         C['mapq_pp'][rg]  = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
