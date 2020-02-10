@@ -38,7 +38,7 @@ parser.add_argument('-c', '--comp',type=str,help='compression type\t[lzf or gzip
 parser.add_argument('-n', '--no_merge_rg',action='store_true',help='do not merge all rg into one called "all"\t[False]')
 parser.add_argument('-w', '--window',type=int,help='window size in bp\t[100]')
 parser.add_argument('-b', '--branch',type=int,help='window branching factor\t[10]')
-parser.add_argument('-t', '--tile',type=bool,help='use tiles for features as opposed to 1-bp sliding windows of size w\t[True]')
+parser.add_argument('--slide',action='store_true',help='use 1-bp sliding windows of size w for features as opposed to tiles\t[False]')
 parser.add_argument('-s', '--seqs',type=str,help='comma seperated list of seqs that will be extracted, \t[all]')
 v = 'comma seperated list of vectors that will be extracted for each seq, all gives every available\t[total]'
 parser.add_argument('-v','--vectors',type=str,help=v)
@@ -85,7 +85,7 @@ if args.window is not None:   w    = args.window
 else:                         w    = 100
 if args.branch is not None:   w_b  = args.branch
 else:                         w_b  = 10
-if args.tile is not None:     tile = args.tile
+if args.slide is not None:    tile = not args.slide
 else:                         tile = True
 if args.no_clean is None:     end_clean = args.no_clean
 else:                         end_clean = True

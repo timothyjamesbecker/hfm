@@ -457,21 +457,21 @@ class HFM:
                                                                      (t,self.__TN__,self.__TN__),dtype='f4',compression=self.__compression__,shuffle=True)
                             else: #need to delete the entry?
                                 data = self.f[sms[rg]+'/'+rg+'/'+self.__seq__+'/'+track+'/transitions/%s'%self.__window__]
-                            self.O = mp.Array(ctypes.c_float,(self.__TN__**2)*len(tiles),lock=False)
+                            self.O = mp.Array(ctypes.c_float,int((self.__TN__**2)*len(tiles)),lock=False)
                             for i in range(len(tiles)):                                              #make ||
-                                core.transitions_bin(self.I,tiles[i][0],tiles[i][1]-1,                 #2D=> 1 lookback
-                                                   self.B,self.O,self.__TN__,i*(self.__TN__**2))     #make ||
+                                core.transitions_bin(self.I,np.uint32(tiles[i][0]),np.uint32(tiles[i][1]),                 #2D=> 1 lookback
+                                                     self.B,self.O,np.uint32(self.__TN__),np.uint32(i*(self.__TN__**2)))   #make ||
                             a,b = int(start/self.__window__),int(start/self.__window__+len(tiles))
                             if self.__linear__:
                                 data[a*(self.__TN__**2):b*(self.__TN__**2)] = self.O[:]
                             else:
-                                self.O = np.reshape(self.O,(len(tiles),self.__TN__,self.__TN__))
+                                self.O = np.reshape(self.O,(len(tiles),int(self.__TN__),int(self.__TN__)))
                                 data[a:b,:,:] = self.O[:,:,:]
                             self.write_attrs(data)
         #TILES--------------------------------------------------------------------------------------------------TILES
         #FULL----------------------------------------------------------------------------------------------------FULL
         else:
-            y = (end-start)-self.__window__
+            y = int((end-start)-self.__window__)
             for track in tracks:
                 if track in self.A:
                     for rg in self.A[track]:
