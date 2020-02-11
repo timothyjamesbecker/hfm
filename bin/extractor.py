@@ -16,6 +16,7 @@ import os
 import time
 import glob
 import sys
+import numpy as np
 if sys.version_info<(3,0):
     import subprocess32 as subprocess
 else:
@@ -38,6 +39,7 @@ parser.add_argument('-c', '--comp',type=str,help='compression type\t[lzf or gzip
 parser.add_argument('-n', '--no_merge_rg',action='store_true',help='do not merge all rg into one called "all"\t[False]')
 parser.add_argument('-w', '--window',type=int,help='window size in bp\t[100]')
 parser.add_argument('-b', '--branch',type=int,help='window branching factor\t[10]')
+parser.add_argument('--bins',type=str,help='comma-seperated bin counting boundries for spectrum and transition features\t[None]')
 parser.add_argument('--slide',action='store_true',help='use 1-bp sliding windows of size w for features as opposed to tiles\t[False]')
 parser.add_argument('-s', '--seqs',type=str,help='comma seperated list of seqs that will be extracted, \t[all]')
 v = 'comma seperated list of vectors that will be extracted for each seq, all gives every available\t[total]'
@@ -87,6 +89,8 @@ if args.branch is not None:   w_b  = args.branch
 else:                         w_b  = 10
 if args.slide is not None:    tile = not args.slide
 else:                         tile = True
+if args.bins is not None:     bins = sorted(list(set([int(x) for x in args.bins.rsplit(',')])))
+else:                         bins = list(np.arange(0.0,1.0+1/25,1/25))
 if args.no_clean is None:     end_clean = args.no_clean
 else:                         end_clean = True
 if args.seqs is not None:     seqs = args.seqs.split(',')
@@ -107,14 +111,14 @@ def collect_results(result):
 #can call this in ||----------------------------------------------------------------
 def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,
                 tracks=['total'],features=['moments'],window=100,window_branch=10,
-                tile=True,tree=True,comp='gzip',verbose=False):
+                tile=True,tree=True,bins=None,comp='gzip',verbose=False):
     result = ''
     start = time.time()
     samples = list(set([sms[k] for k in sms]))
     chunk = max(window,window*(int(1E6/len(sms))/window))
     try:
         s = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
-                    window_root=int(1E9),chunk=chunk,compression=comp)
+                    window_root=int(1E9),bins=bins,chunk=chunk,compression=comp)
         s.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,
                       tracks=tracks,features=features,verbose=verbose)
         print('seq %s extracted, starting window updates'%seq[list(seq.keys())[0]])
@@ -178,7 +182,7 @@ if type(hdf5_path)==str:
                 if not os.path.exists(base_name+'.seq.'+seq[list(seq.keys())[0]]+'.hdf5'):
                     p1.apply_async(process_seq,
                                    args=(alignment_path,base_name,sms,seq,
-                                         merge_rg,vect,feat,w,w_b,tile,True,comp,True),
+                                         merge_rg,vect,feat,w,w_b,tile,True,bins,comp,True),
                                    callback=collect_results)
                     time.sleep(0.25)
             p1.close()
@@ -188,8 +192,8 @@ if type(hdf5_path)==str:
                 print('merging and cleaning intermediary files')
                 if len(glob.glob(args.out_dir+'/seqs/*temp*.hdf5'))>0:
                     print(subprocess.check_output(' '.join(['rm',args.out_dir+'/seqs/*temp*.hdf5']),shell=True))
-                hfm.merge_seqs(hdf5_path+'/seqs/',hdf5_out) #merge the files
-                print(subprocess.check_output(' '.join(['rm','-rf',hdf5_path+'/seqs/']),shell=True)) #delete the seperate files
+                # hfm.merge_seqs(hdf5_path+'/seqs/',hdf5_out) #merge the files
+                #print(subprocess.check_output(' '.join(['rm','-rf',hdf5_path+'/seqs/']),shell=True)) #delete the seperate files
             else:
                 s = ''
                 for l in result_list: s += l['result']+'\n'
