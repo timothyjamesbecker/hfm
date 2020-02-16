@@ -592,7 +592,7 @@ class HFM:
     def extract_seq(self,alignment_path,base_name,sms,seq,
                     merge_rg=True,tracks=['total'],features=['moments'],verbose=False):
         k = list(seq.keys())[0]
-        passes = int(k/self.__chunk__)
+        passes = int(k//self.__chunk__)
         last   = k%self.__chunk__
         if last == 0: last = []
         else:         last = [last]
@@ -631,11 +631,11 @@ class HFM:
                                         l = len(data)
                                         self.I    = mp.Array(ctypes.c_double,self.__MN__*l,lock=False) #set sratch
                                         self.I[:] = data[:] #don't have to reshape to 1D array for linear
-                                        self.O    = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False)
+                                        self.O    = mp.Array(ctypes.c_double,int(self.__MN__*(l//b+(1 if l%b>0 else 0))),lock=False)
                                         while w*b<=r:
                                             if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t updating moments for %sbp to %sbp...'%(sm,rg,seq[k],track,w,w*b))
                                             w *= b
-                                            l = int(l/b+(1 if l%b>0 else 0)) #update the new number of windows to use and window size
+                                            l = int(l//b+(1 if l%b>0 else 0)) #update the new number of windows to use and window size
                                             core.merge_tiled_moments_target(self.I,self.O,b,disjoint=True)
                                             if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t completed %sbp to %sbp updates'%(sm,rg,seq[k],track,w,w*b))
                                             if self.__compression__=='gzip':
@@ -654,18 +654,18 @@ class HFM:
                                             #reset data arrays---------------------------------------------------------------------------
                                             self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
                                             self.I[:]  = self.O[:]                                              #copy back the last answer
-                                            self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False) #reset output
+                                            self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l//b+(1 if l%b>0 else 0))),lock=False) #reset output
                                     else:
                                         w,b = np.uint64(self.__window__),np.uint32(self.__window_branch__)
                                         data = self.f[sm][rg][seq[k]][track]['moments'][str(w)] #read from hdf5 once
                                         l = len(data)
-                                        self.I    = mp.Array(ctypes.c_double,self.__MN__*l,lock=False) #set sratch
-                                        self.I[:] = np.reshape(data,(self.__MN__*l,))[:] #reshape to 1D array for linear
-                                        self.O    = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False)
+                                        self.I    = mp.Array(ctypes.c_double,int(self.__MN__*l),lock=False) #set sratch
+                                        self.I[:] = np.reshape(data,(int(self.__MN__*l),))[:] #reshape to 1D array for linear
+                                        self.O    = mp.Array(ctypes.c_double,int(self.__MN__*(l//b+(1 if l%b>0 else 0))),lock=False)
                                         while w*b<=r:
                                             if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t updating moments for %sbp to %sbp...'%(sm,rg,seq[k],track,w,w*b))
                                             w *= b
-                                            l = int(l/b+(1 if l%b>0 else 0)) #update the new number of windows to use and window size
+                                            l = int(l//b+(1 if l%b>0 else 0)) #update the new number of windows to use and window size
                                             core.merge_tiled_moments_target(self.I,self.O,b,disjoint=True)
                                             if verbose: print('sample:%s\trg:%s\tseq:%s\ttrack:%s\t completed %sbp to %sbp updates'%(sm,rg,seq,track,w,w*b))
                                             if self.__compression__=='gzip':
@@ -681,9 +681,9 @@ class HFM:
                                             self.__window__ = w                                                 # update window size
                                             self.write_attrs(data)                                         # save attributes
                                             #reset data arrays---------------------------------------------------------------------------
-                                            self.I     = mp.Array(ctypes.c_double,self.__MN__*l,lock=False)     #reset sratch
+                                            self.I     = mp.Array(ctypes.c_double,int(self.__MN__*l),lock=False)     #reset sratch
                                             self.I[:]  = self.O[:]                                              #copy back the last answer
-                                            self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l/b+(1 if l%b>0 else 0))),lock=False) #reset output
+                                            self.O     = mp.Array(ctypes.c_double,int(self.__MN__*(l//b+(1 if l%b>0 else 0))),lock=False) #reset output
                             self.set_attributes(base)  # must reset the self.__window__
                             if 'spectrum' in self.f[sm][rg][seq[k]][track]:
                                 print('spectrum updates not implemented in HFM yet...')

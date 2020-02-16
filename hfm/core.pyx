@@ -13,7 +13,7 @@ cimport numpy as np
 #regular imports
 import math
 import numpy as np
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 
 #feature defines
 cdef unsigned int N,SUM,MIN,MAX,M1,M2,M3,M4,FN

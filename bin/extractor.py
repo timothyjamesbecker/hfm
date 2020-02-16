@@ -192,8 +192,8 @@ if type(hdf5_path)==str:
                 print('merging and cleaning intermediary files')
                 if len(glob.glob(args.out_dir+'/seqs/*temp*.hdf5'))>0:
                     print(subprocess.check_output(' '.join(['rm',args.out_dir+'/seqs/*temp*.hdf5']),shell=True))
-                # hfm.merge_seqs(hdf5_path+'/seqs/',hdf5_out) #merge the files
-                #print(subprocess.check_output(' '.join(['rm','-rf',hdf5_path+'/seqs/']),shell=True)) #delete the seperate files
+                hfm.merge_seqs(hdf5_path+'/seqs/',hdf5_out) #merge the files
+                print(subprocess.check_output(' '.join(['rm','-rf',hdf5_path+'/seqs/']),shell=True)) #delete the seperate files
             else:
                 s = ''
                 for l in result_list: s += l['result']+'\n'
@@ -241,27 +241,27 @@ if not os.path.exists(hdf5_path + '/seqs/'): os.makedirs(hdf5_path + '/seqs/')
 seq = {}
 alignment_path = alignment_paths[0]
 seq_order = hfm.get_sam_seq(alignment_path)
-for s in seq_order[0:1]:
-    if s[s.keys()[0]] in args.seqs.rsplit(','):
-        seq = {s.keys()[0]:s[s.keys()[0]]}
+for s in seq_order:
+    if s[list(s.keys())[0]] in args.seqs.rsplit(','):
+        seq = {list(s.keys())[0]:s[list(s.keys())[0]]}
 tracks,features,verbose = vect,feat,True
 extension = '.'+alignment_path.rsplit('.')[-1]
 base_name = hdf5_path+'/seqs/'+alignment_path.rsplit('/')[-1].rsplit(extension)[0]
-hdf5_out_path = base_name+'.seq.'+seq[seq.keys()[0]]+'.hdf5'
+hdf5_out_path = base_name+'.seq.'+seq[list(seq.keys())[0]]+'.hdf5'
 sms = hfm.get_sam_sm(alignment_path)
 samples = list(set([sms[k] for k in sms]))
-chunk = max(w,w*(int(1E6/len(sms))/w))
+chunk = max(w,w*(int(1E6/len(sms))//w))
 s = hfm.HFM(tile=tile,window=w,window_branch=w_b,window_root=int(1E9),
             chunk=chunk,compression='gzip')
-s.extract_seq(alignment_paths[0],base_name,sms,
-              seq,merge_rg=merge_rg,tracks=tracks,features=features,verbose=verbose)
-# print('seq %s extracted, starting window updates'%seq[seq.keys()[0]])
-# s.update_seq_tree(base_name,seq,verbose=verbose)
 hdf5_path = base_name
 import numpy as np
 from h5py import File
 import core
 import ctypes
 self = s
+s.extract_seq(alignment_path,base_name,sms,
+              seq,merge_rg=merge_rg,tracks=tracks,features=features,verbose=verbose)
+# print('seq %s extracted, starting window updates'%seq[seq.keys()[0]])
+s.update_seq_tree(base_name,seq,verbose=verbose)
 #debug one seq here----------------------------------------------------------
 """
