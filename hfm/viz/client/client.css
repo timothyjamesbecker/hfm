@@ -1,0 +1,87 @@
+.ui-widget input, .ui-widget select, .ui-widget textarea, .ui-widget button {
+    font-family:'Lato','sans-serif';
+    font-size: 60%;
+    color:white;
+    background-color: rgb(110,110,110);
+    border-radius: 8px;
+}
+.smstrack_input{
+    width:25%;
+    border-radius: 8px;
+}
+.smstiles_input{
+    width:5%;
+    border-radius:4px;
+}
+
+#view_button:hover{
+    width:10%;
+    background-color: rgb(150,150,150);
+}
+#view_button{
+    width:10%;
+    background-color: rgb(110,110,110);
+}
+
+.gene_input{
+    width:25%;
+    font-family:'Lato','sans-serif';
+    font-size: 60%;
+    color:white;
+    background-color: rgb(110,110,110);
+    border-radius: 8px;
+}
+
+.coord_input{
+    width:20%;
+}
+path{
+    fill:white;
+}
+text{
+    font-family: 'Lato', sans-serif;
+}
+#main_control_mask{
+    position: fixed;
+    left: 0px;
+    top: 0px;
+    width:100%;
+    height:13%;
+    background-color: rgb(255,255,255);
+    opacity: 0.9;
+}
+#main_control_container{
+    position: fixed;
+    left:10px;
+    top:10px;
+    width:85%;
+    height:auto;
+    padding:12px;
+    opacity:1.0;
+    background-color: rgb(180,180,180);
+    color:white;
+    border-radius: 10px;
+    text-shadow: black 1px 2px;
+    font-size: 200%;
+    font-family:'Lato','sans-serif'
+}
+
+#nav_container{
+    margin-top:4%;
+    position: fixed;
+    left:0px;
+    top:0px;
+    width:auto;
+    height:8%;
+    padding:0px;
+    font-size: 100%; !important;
+    background-color: rgba(240,240,240,0.8);
+    color:white;
+    border-radius: 10px;
+    font-family:'Lato','sans-serif' !important;
+}
+#track_container{
+    margin-top:9%;
+    background-color: rgb(50,50,50);
+}
+

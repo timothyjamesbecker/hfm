@@ -7,7 +7,11 @@ import os
 import glob
 import numpy as np
 import multiprocessing as mp
-import subprocess32 as subprocess
+try:
+    import subprocess32 as subprocess
+except Exception as E:
+    import subprocess
+    pass
 
 des = """1000 genomes low coverage ftp download management and fastq alignment to synchronized hfm bot"""
 parser = argparse.ArgumentParser(description=des)
