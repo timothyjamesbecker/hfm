@@ -32,6 +32,7 @@ parser.add_argument('-t', '--threads', type=int, help='number of threads per con
 parser.add_argument('-m', '--memory', type=int, help='total GB to allocate per connection   \t[1]')
 parser.add_argument('-n', '--num_samples', type=str, help='total number of samples to download\t[1]')
 parser.add_argument('--high_cov', action='store_true', help='get the high coverage data\t[False]')
+parser.add_argument('--nih', action='store_true', help='use nih url instead of ebi\t[False]')
 args = parser.parse_args()
 
 if args.pop_list is not None:
@@ -428,7 +429,10 @@ def collect_results(result):
     results.append(result)
 
 if __name__ == '__main__':
-    base_url = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/phase3/data/'
+    if not args.nih:
+        base_url = 'ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/phase3/data/'
+    else:
+        base_url = 'ftp://ftp.ncbi.nlm.nih.gov/1000genomes/ftp/phase3/data/'
     log_path = out_dir
     print('using sample_list: %s' % sample_list_path)
     print('writing logs to %s' % log_path)
