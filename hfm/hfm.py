@@ -592,8 +592,8 @@ class HFM:
     def extract_seq(self,alignment_path,base_name,sms,seq,
                     merge_rg=True,tracks=['total'],features=['moments'],verbose=False):
         k = list(seq.keys())[0]
-        passes = int(k//self.__chunk__)
-        last   = k%self.__chunk__
+        passes = int(k//int(self.__chunk__))
+        last   = int(k%int(self.__chunk__))
         if last == 0: last = []
         else:         last = [last]
         chunks = [self.__chunk__ for y in range(passes)]+last

@@ -172,6 +172,8 @@ function render_axis_components(view){
     d3.select('body')
         .on("keydown", function() {
             if(d3.event.key == 'ArrowLeft'){
+                d3.event.preventDefault();
+                d3.event.stopPropagation();
                 console.log('left arrow keydown');
                 var coord = last_axis['coord'];       //seq,start,end coordinates
                 var m     = last_axis['axis']['length']; //number of windows
@@ -186,6 +188,8 @@ function render_axis_components(view){
                 }
             }
             if(d3.event.key == 'ArrowRight'){
+                d3.event.preventDefault();
+                d3.event.stopPropagation();
                 console.log('right arrow keydown');
                 var coord = last_axis['coord'];       //seq,start,end coordinates
                 var m     = last_axis['axis']['length']; //number of windows
@@ -193,6 +197,40 @@ function render_axis_components(view){
                 var diff  = w*Math.round(m*0.1)     //how much to shift by...
                 var new_coord = [coord[0],coord[1]+diff,coord[2]+diff];
                 if(new_coord[2]<=ref_seqs[coord[0]]) {
+                    last_axis['coord'] = new_coord;
+                    last_axis['arrow'] = true;
+                    $("#geneorpos_input").val(new_coord[0].toString() + ":" + new_coord[1].toString() + "-" + new_coord[2].toString());
+                    render(d3.event.sourceEvent);
+                }
+            }
+            if(d3.event.key == 'ArrowUp'){
+                d3.event.preventDefault();
+                d3.event.stopPropagation();
+                console.log('up arrow keydown');
+                var coord  = last_axis['coord'];
+                var span   = Math.round((coord[2]-coord[1])/2.0);
+                var center = coord[1]+span;
+                var diff   = Math.round(span*0.8);
+                var new_coord = [coord[0],center-diff,center+diff];
+                console.log(new_coord);
+                if(new_coord[1]>=0) {
+                    last_axis['coord'] = new_coord;
+                    last_axis['arrow'] = true;
+                    $("#geneorpos_input").val(new_coord[0].toString() + ":" + new_coord[1].toString() + "-" + new_coord[2].toString());
+                    render(d3.event.sourceEvent);
+                }
+            }
+            if(d3.event.key == 'ArrowDown'){
+                d3.event.preventDefault();
+                d3.event.stopPropagation();
+                console.log('up arrow keydown');
+                var coord  = last_axis['coord'];
+                var span   = Math.round((coord[2]-coord[1])/2.0);
+                var center = coord[1]+span;
+                var diff   = Math.round(span*1.2);
+                var new_coord = [coord[0],center-diff,center+diff];
+                console.log(new_coord);
+                if(new_coord[1]>=0) {
                     last_axis['coord'] = new_coord;
                     last_axis['arrow'] = true;
                     $("#geneorpos_input").val(new_coord[0].toString() + ":" + new_coord[1].toString() + "-" + new_coord[2].toString());
@@ -335,12 +373,16 @@ function render_tracks(view,sm){ //main method for new gene/pos query will refre
             .attr("y",-2*height/3-margin)
             .text(sm+' : '+trk);
     }
+    if($(window).scrollTop()!=scroll_top){
+        $(window).scrollTop(scroll_top);
+    }
 }
 
 function render(e){
+    scroll_top = $(window).scrollTop();
+    console.log(scroll_top);
     var flank = 0.25;
     last_scroll = null;
-    scroll_top = $(window).scrollTop();
     if(e!=null){ e.preventDefault(); }
     if(last_axis!=null && 'arrow' in last_axis){ var flank = 0.0; } //no flank when arrow controls are used
     var tiles = Math.ceil(Number.parseFloat($('#tiles_input[name=tiles]').val().split('tiles:').join('')));
@@ -402,7 +444,6 @@ function render(e){
             }
         }
     });
-    $(window).scrollTop(scroll_top);
 }
 
 function get_tracks(url,sm,trks) {
@@ -437,7 +478,9 @@ $('#coord_form input[name=sms]').val('all sm(s)');
 $('#coord_form input[name=trks]').val('all trk(s)');
 $('#coord_form input[name=gene]').val('gene or chrom:start-end');
 $('#coord_form input[name=tiles]').val('tiles:400');
-$('#coord_form').submit(function(e){ render(e); });
+$('#coord_form').submit(function(e){
+    render(e);
+});
 
 //may want to update these two to have CSV autocomplete and no auto-clear...
 $.ajax({

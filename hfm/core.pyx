@@ -1,5 +1,5 @@
 #hfm/core.pyx
-#Copyright (C) 2019 Timothy James Becker
+#Copyright (C) 2020 Timothy James Becker
 
 #c imports
 from libc.stdlib cimport malloc, free
@@ -13,7 +13,7 @@ cimport numpy as np
 #regular imports
 import math
 import numpy as np
-__version__ = '0.1.5'
+__version__ = '0.1.6'
 
 #feature defines
 cdef unsigned int N,SUM,MIN,MAX,M1,M2,M3,M4,FN
@@ -31,47 +31,61 @@ ctypedef float tout_t;
 
 
 #use this for slightly faster default feature constructions using numpy broadcasting...
-@cython.boundscheck(False)
-@cython.nonecheck(False)
-@cython.wraparound(False)
+#@cython.boundscheck(False)
+#@cython.nonecheck(False)
+#@cython.wraparound(False)
 def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int end,
-                          bint merge_rg=True,int min_anchor=36, int min_clip=18):
-    cdef int            i,j,a,b,tid,mid,mapq,tlen,norm,read_start,read_end,gc,last,offset
-    cdef str            t,v,rg,tag,cigar,track,sequence
-    cdef list           tags
+                          bint merge_rg=True, int min_anchor=36, int min_clip=18, int big_del=36):
+    cdef int            i,j,a,b,tid,mid,mapq,tlen,last,offset
+    cdef float          x,y,z
+    cdef str            t,v,rg,tag,track,sequence
+    cdef list           tags,cigar,cigar_list
     cdef dict           C = {}
     cdef AlignmentFile  samfile
     cdef AlignedSegment read
-    rg         = 'all'
-    tracks = ['primary','alternate','orient_same','orient_out','orient_um','orient_chr','right_anchor','left_anchor',
-              'right_clipped','left_clipped','clipped','deletion','insertion','substitution','fwd_rev_diff']   #zeros
-    values = ['total','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','GC'] #psuedo counts
+    rg     = 'all'
+    tracks = ['alternate','orient_same','orient_out','orient_um','orient_chr','right_anchor','left_anchor',
+              'right_clipped','left_clipped','clipped','deletion','insertion','substitution','splice',
+              'big_del','fwd_rev_diff']
+    values = ['total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis',
+              'len_diff','tlen_dis_rd','tlen_pp_rd','tlen_rd','RD','GC']
     if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))} #duplicated from the safe lib
     for rg in sms:
         for t in tracks:
             if t in C: C[t][rg] = np.zeros([end-start,], dtype=np.float32)
             else:      C[t] = {rg:np.zeros([end-start,], dtype=np.float32)}
         for v in values: #don't have to deal with 0-div
-            if v in C: C[v][rg] = np.zeros([end-start,], dtype=np.float32)+1.0/(end-start)
-            else:      C[v] = {rg:np.zeros([end-start,], dtype=np.float32)+1.0/(end-start)}
+            if v in C: C[v][rg] = np.zeros([end-start,], dtype=np.float32)+1.0
+            else:      C[v] = {rg:np.zeros([end-start,], dtype=np.float32)+1.0}
     samfile = AlignmentFile(alignment_path,'rb')
     for read in samfile.fetch(start=start,end=end,region=seq,until_eof=True):
-        tid,mid,tlen,mapq   = read.tid,read.rnext,read.tlen,read.mapq #need to check single read RNA
-        if read.aend is not None and not read.is_duplicate and not read.is_qcfail:
-            if 0>read.pos-start:          a = 0
-            else:                         a = read.pos-start
-            if end-start<read.aend-start: b = end-start
-            else:                         b = read.aend-start
-            sequence = read.seq.upper()[:b-a]
-            if not merge_rg:               #if read group tage merging is enabled skip this part
-                tags = read.get_tags()
-                for j in range(len(tags)): #find the RG string in the read
-                    if tags[j][0]=='RG':   #no matching to prexisting rg here...
+        if read.reference_end is not None and not read.is_duplicate and not read.is_qcfail:
+            pos  = read.reference_start
+            aend = read.reference_end
+            qend = read.query_length+pos
+            tid  = read.reference_id
+            tlen = read.template_length
+            mid  = read.next_reference_id
+            mapq = read.mapping_quality
+            if 0>pos-start:          a = 0           #clips to array start
+            else:                    a = pos-start   #in between start and end
+            if end-start<aend-start: b = end-start   #clips to array end
+            else:                    b = aend-start  #in between start and end
+            if end-start<qend-start: c = end-start   #clips to array end
+            else:                    c = qend-start  #in between start and end
+            sequence = read.query_sequence.upper()
+            if not merge_rg:                 #if read group tag merging is enabled, skip this part
+                tags = read.get_tags()       #all optional tags
+                for j in range(len(tags)):   #find the RG string in the read
+                    if tags[j][0]=='RG':     #no matching to prexisting rg here...
                         rg = tags[j][1]
                         break
-            C['total'][rg][a:b] += 1.0
-            C['mapq'][rg][a:b]  += mapq
-            C['tlen'][rg][a:b]  += tlen
+            C['total'][rg][a:b]            += 1.0
+            C['mapq'][rg][a:b]             += mapq
+            C['tlen'][rg][a:b]             += tlen
+            C['len_diff'][rg][a:b]         += aend-qend                     #diff of mapped read to unmapped
+            if tlen>0.0:   C['tlen_rd'][rg][a:min(b+tlen,end-start)] += 1.0 #tlen projection across RD
+            #elif tlen<0.0: C['tlen_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
             if read.is_proper_pair:
                 C['proper_pair'][rg][a:b]  += 1.0
                 C['mapq_pp'][rg][a:b]      += mapq
@@ -79,11 +93,16 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             elif tid==mid and not read.mate_is_unmapped:
                 C['discordant'][rg][a:b]   += 1.0
                 C['mapq_dis'][rg][a:b]     += mapq
-                C['tlen_dis'][rg][a:b]     += tlen                                          
+                C['tlen_dis'][rg][a:b]     += 1.0
+                C['tlen_dis'][rg][max(0,a+tlen):min(b+tlen,end-start)] += 1.0
+                if tlen>0.0:
+                    C['tlen_dis_rd'][rg][a:min(b+tlen,end-start)] += 1.0 #tlen projection across RD
+                # elif tlen<0.0:
+                #     C['tlen_dis_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
             if not read.is_supplementary and not read.is_secondary:  C['primary'][rg][a:b]      += 1.0
             else:                                                    C['alternate'][rg][a:b]    += 1.0
             if not read.is_reverse:                                  C['fwd_rev_diff'][rg][a:b] += 1.0
-            else:                                                    C['fwd_rev_diff'][rg][a:b] -= 1.0    
+            else:                                                    C['fwd_rev_diff'][rg][a:b] -= 1.0
             if ((read.is_reverse and read.mate_is_reverse) or\
                 (not read.is_reverse and not read.mate_is_reverse)): C['orient_same'][rg][a:b]  += 1.0
             elif ((read.is_reverse and tlen>0) or\
@@ -92,66 +111,89 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             elif tid!=mid:                                           C['orient_chr'][rg][a:b]   += 1.0
             if len(sequence)>0:
                 C['GC'][rg][a:b]  += <float>(sequence.count('G')+sequence.count('C'))/<float>(len(sequence))
-            cigar = read.cigarstring #sequence/cigar based ops-------
-            #cigar op counting----------------------------------------
-            last,offset,j,right_anchor,left_anchor,right_clip,left_clip = 0,0,0,False,False,False,False
-            for i in range(len(cigar)):
-                if cigar[i] == 'M' or cigar[i] == '=':
-                    j = int(cigar[last:i])
-                    left_anchor  = offset<=0 and (j-offset+1)>=min_anchor
-                    right_anchor = j>=(b-1)  and (j-offset+1)>=min_anchor
-                    last = i+1
-                    offset += j
-                elif cigar[i] == 'D':
-                    j = int(cigar[last:i])
-                    last = i+1
-                    C['deletion'][rg][a+offset:a+offset+j]     += 1.0
-                    offset += j
-                elif cigar[i] == 'I':
-                    j = int(cigar[last:i])
-                    last = i+1
-                    C['insertion'][rg][a+offset:a+offset+j]    += 1.0
-                    offset += j
-                elif cigar[i] == 'X':
-                    j = int(cigar[last:i])
-                    last = i+1
-                    C['substitution'][rg][a+offset:a+offset+j] += 1.0
-                    offset += j
-                elif cigar[i] == 'S' or cigar[i] == 'H':
-                    j = int(cigar[last:i])
-                    left_clip  = offset<=0 and (j-offset+1)>=min_clip
-                    right_clip = j>=(b-1)  and (j-offset+1)>=min_clip
-                    last = i+1
-                    C['clipped'][rg][a+offset:a+offset+j]      += 1.0
-                    offset += j
-            if not read.is_reverse:
-                if left_anchor:  C['left_anchor'][rg][a:b]   += 1.0
-                if right_anchor: C['right_anchor'][rg][a:b]  += 1.0
-                if left_clip:    C['left_clipped'][rg][a:b]  += 1.0
-                if right_clip:   C['right_clipped'][rg][a:b] += 1.0
-            else:
-                if left_anchor:  C['right_anchor'][rg][a:b]  += 1.0
-                if right_anchor: C['left_anchor'][rg][a:b]   += 1.0
-                if left_clip:    C['right_clipped'][rg][a:b] += 1.0
-                if right_clip:   C['left_clipped'][rg][a:b]  += 1.0
+
+            #cigar ops based calculations---------------------
+            cigar = read.cigartuples
+            if cigar is not None:
+                cigar = read.cigartuples
+                cigar_list,j = [],0
+                for i in range(len(cigar)):
+                    cigar_list += [(cigar[i][0],j,j+cigar[i][1])]
+                    j += cigar[i][1]
+                if len(cigar_list)>1:
+                    last = len(cigar_list)-1
+                    if cigar_list[0][0]==4 or cigar_list[0][0]==5: #'S' or 'H'
+                        e = a+cigar_list[0][1]
+                        f = a+cigar_list[0][2]
+                        if f-e>=min_clip:
+                            C['clipped'][rg][e:f]                           += 1.0
+                            C['left_clipped'][rg][e:f]  += 1.0
+                        if cigar_list[last][0]==0 or cigar_list[last][0]==7: #'M' or '='
+                            e = a+cigar_list[0][1]
+                            f = a+cigar_list[0][2]
+                            if f-e>=min_anchor:
+                                C['right_anchor'][rg][e:f] += 1.0
+                    elif cigar_list[last][0]==4 or cigar_list[last][0]==5: #'S' or 'H'
+                        e = a+cigar_list[0][1]
+                        f = a+cigar_list[0][2]
+                        if f-e>=min_clip:
+                            C['clipped'][rg][e:f]                           += 1.0
+                            C['right_clipped'][rg][e:f] += 1.0
+                        if cigar_list[0][0]==0 or cigar_list[0][0]==7: #'M'
+                            e = a+cigar_list[0][1]
+                            f = a+cigar_list[0][2]
+                            if f-e>=min_anchor:
+                                C['left_anchor'][rg][e:f] += 1.0
+                    else:
+                        for i in range(len(cigar_list)):
+                            e = a+cigar_list[0][1]
+                            f = a+cigar_list[0][2]
+                            if cigar_list[i][0]==1: C['insertion'][rg][e:f]    += 1.0
+                            if cigar_list[i][0]==2:
+                                C['deletion'][rg][e:f] += 1.0
+                                if f-e>=big_del:
+                                    C['big_del'][rg][e:f] += 1.0
+                            if cigar_list[i][0]==8: C['substitution'][rg][e:f] += 1.0
+                            if cigar_list[i][0]==3: C['splice'][rg][e:f]       += 1.0
+            #cigar ops based calculations---------------------
+
     samfile.close()
+    #'total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','len_diff','tlen_rd','big_del','RD','GC'
     if not merge_rg:
         for rg in sms:
-            C['GC'][rg]       = C['GC'][rg]-1.0
-            C['mapq'][rg]     = C['mapq'][rg]/C['total'][rg]-1.0
-            C['tlen'][rg]     = C['tlen'][rg]/C['total'][rg]-1.0
-            C['mapq_pp'][rg]  = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
-            C['tlen_pp'][rg]  = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
-            C['mapq_dis'][rg] = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
-            C['tlen_dis'][rg] = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
+            C['len_diff'][rg]    = C['len_diff'][rg]-1.0
+            C['RD'][rg]          = C['primary'][rg]/C['GC'][rg]
+            C['GC'][rg]          = C['GC'][rg]-1.0
+            C['mapq'][rg]        = C['mapq'][rg]/C['total'][rg]-1.0
+            C['mapq_pp'][rg]     = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
+            C['mapq_dis'][rg]    = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
+            C['tlen'][rg]        = C['tlen'][rg]/C['total'][rg]-1.0
+            C['tlen_rd'][rg]     = C['tlen_rd'][rg]/C['RD'][rg]-1.0
+            C['tlen_pp'][rg]     = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
+            C['tlen_dis'][rg]    = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
+            C['tlen_dis_rd'][rg] = C['tlen_dis_rd'][rg]/C['RD'][rg]-1.0
+            C['RD'][rg]          = C['RD'][rg]-1.0
+            C['discordant'][rg]  = C['discordant'][rg]-1.0
+            C['proper_pair'][rg] = C['proper_pair'][rg]-1.0
+            C['primary'][rg]     = C['primary'][rg]-1.0
+            C['total'][rg]       = C['total'][rg]-1.0
     else:
-        C['GC'][rg]       = C['GC'][rg]-1.0
-        C['mapq'][rg]     = C['mapq'][rg]/C['total'][rg]-1.0
-        C['tlen'][rg]     = C['tlen'][rg]/C['total'][rg]-1.0
-        C['mapq_pp'][rg]  = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
-        C['tlen_pp'][rg]  = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
-        C['mapq_dis'][rg] = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
-        C['tlen_dis'][rg] = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
+        C['len_diff'][rg]    = C['len_diff'][rg]-1.0
+        C['RD'][rg]          = C['primary'][rg]/C['GC'][rg]
+        C['GC'][rg]          = C['GC'][rg]-1.0
+        C['mapq'][rg]        = C['mapq'][rg]/C['total'][rg]-1.0
+        C['mapq_pp'][rg]     = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
+        C['mapq_dis'][rg]    = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
+        C['tlen'][rg]        = C['tlen'][rg]/C['total'][rg]-1.0
+        C['tlen_rd'][rg]     = C['tlen_rd'][rg]/C['RD'][rg]-1.0
+        C['tlen_pp'][rg]     = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
+        C['tlen_dis'][rg]    = C['tlen_dis'][rg]/C['RD'][rg]-1.0
+        C['tlen_dis_rd'][rg] = C['tlen_dis_rd'][rg]/C['discordant'][rg]-1.0
+        C['RD'][rg]          = C['RD'][rg]-1.0
+        C['discordant'][rg]  = C['discordant'][rg]-1.0
+        C['proper_pair'][rg] = C['proper_pair'][rg]-1.0
+        C['primary'][rg]     = C['primary'][rg]-1.0
+        C['total'][rg]       = C['total'][rg]-1.0
     return C
 
 #[0] utilities

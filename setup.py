@@ -46,7 +46,7 @@ def get_version():
             if line.startswith('__version__'):
                 return literal_eval(line.partition('=')[2].lstrip())
     raise ValueError("__version__ not found")
-cythonize('hfm/core.pyx')
+cythonize('hfm/core.pyx',language_level=2)
 extensions = [Extension('core',
                         sources=['hfm/core.pyx'],
                         libraries=['m'],
