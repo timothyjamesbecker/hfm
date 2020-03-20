@@ -42,7 +42,7 @@ else: raise IOError
 if args.out_dir is not None:
     out_dir = args.out_dir
 else:
-    if ext: out_dir = '/'.join(in_path.rsplit('/')[:-1])
+    if ext: out_dir = '/'.join(in_path.rsplit('/')[:-1])+'/'
     else:   out_dir = in_path+'/'
 if not os.path.exists(out_dir): os.mkdir(out_dir)
 if args.final_dir is not None:
