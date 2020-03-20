@@ -13,7 +13,7 @@ cimport numpy as np
 #regular imports
 import math
 import numpy as np
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 
 #feature defines
 cdef unsigned int N,SUM,MIN,MAX,M1,M2,M3,M4,FN
@@ -35,11 +35,12 @@ ctypedef float tout_t;
 #@cython.nonecheck(False)
 #@cython.wraparound(False)
 def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int end,
-                          bint merge_rg=True, int min_anchor=36, int min_clip=18, int big_del=36):
+                          bint merge_rg=True, bint dna=True,
+                          int min_anchor=36, int min_clip=18, int big_del=36):
     cdef int            i,j,a,b,tid,mid,mapq,tlen,last,offset
     cdef float          x,y,z
     cdef str            t,v,rg,tag,track,sequence
-    cdef list           tags,cigar,cigar_list
+    cdef list           tags,cigar,cigar_list,dnas
     cdef dict           C = {}
     cdef AlignmentFile  samfile
     cdef AlignedSegment read
@@ -49,6 +50,7 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
               'big_del','fwd_rev_diff']
     values = ['total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis',
               'len_diff','tlen_dis_rd','tlen_pp_rd','tlen_rd','RD','GC']
+    dna_trans = ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
     if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))} #duplicated from the safe lib
     for rg in sms:
         for t in tracks:
@@ -57,6 +59,10 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
         for v in values: #don't have to deal with 0-div
             if v in C: C[v][rg] = np.zeros([end-start,], dtype=np.float32)+1.0
             else:      C[v] = {rg:np.zeros([end-start,], dtype=np.float32)+1.0}
+        if dna:
+            for d in dna_trans:
+                if d in C: C[d][rg] = np.zeros([end-start], dtype=np.float32)
+                else:      C[d] = {rg:np.zeros([end-start], dtype=np.float32)}
     samfile = AlignmentFile(alignment_path,'rb')
     for read in samfile.fetch(start=start,end=end,region=seq,until_eof=True):
         if read.reference_end is not None and not read.is_duplicate and not read.is_qcfail:
@@ -111,7 +117,23 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             elif tid!=mid:                                           C['orient_chr'][rg][a:b]   += 1.0
             if len(sequence)>0:
                 C['GC'][rg][a:b]  += <float>(sequence.count('G')+sequence.count('C'))/<float>(len(sequence))
-
+                if dna: #dna transistion feature calculations
+                    C['A-A'][rg][a:b]  += <float>(sequence.count('AA'))/<float>(len(sequence))
+                    C['A-C'][rg][a:b]  += <float>(sequence.count('AC'))/<float>(len(sequence))
+                    C['A-G'][rg][a:b]  += <float>(sequence.count('AG'))/<float>(len(sequence))
+                    C['A-T'][rg][a:b]  += <float>(sequence.count('AT'))/<float>(len(sequence))
+                    C['C-A'][rg][a:b]  += <float>(sequence.count('CA'))/<float>(len(sequence))
+                    C['C-C'][rg][a:b]  += <float>(sequence.count('CC'))/<float>(len(sequence))
+                    C['C-G'][rg][a:b]  += <float>(sequence.count('CG'))/<float>(len(sequence))
+                    C['C-T'][rg][a:b]  += <float>(sequence.count('CT'))/<float>(len(sequence))
+                    C['G-A'][rg][a:b]  += <float>(sequence.count('GA'))/<float>(len(sequence))
+                    C['G-C'][rg][a:b]  += <float>(sequence.count('GC'))/<float>(len(sequence))
+                    C['G-G'][rg][a:b]  += <float>(sequence.count('GG'))/<float>(len(sequence))
+                    C['G-T'][rg][a:b]  += <float>(sequence.count('GT'))/<float>(len(sequence))
+                    C['T-A'][rg][a:b]  += <float>(sequence.count('TA'))/<float>(len(sequence))
+                    C['T-C'][rg][a:b]  += <float>(sequence.count('TC'))/<float>(len(sequence))
+                    C['T-G'][rg][a:b]  += <float>(sequence.count('TG'))/<float>(len(sequence))
+                    C['T-T'][rg][a:b]  += <float>(sequence.count('TT'))/<float>(len(sequence))
             #cigar ops based calculations---------------------
             cigar = read.cigartuples
             if cigar is not None:
