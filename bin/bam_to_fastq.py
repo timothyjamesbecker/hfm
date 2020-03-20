@@ -64,7 +64,7 @@ else:
     cpus = 4
 
 if __name__=='__main__':
-    for sbcram in sbcrams:
+    for sbcram in sorted(sbcrams):
         t_start = time.time()
         command = ['java -Xmx%sg -Dsamjdk.use_async_io_read_samtools=false -Dsamjdk.use_async_io_write_samtools=true'%mem,
                    '-Dsamjdk.use_async_io_write_tribble=false -Dsamjdk.compression_level=2','--MAX_RECORDS_IN_RAM=1000000',
