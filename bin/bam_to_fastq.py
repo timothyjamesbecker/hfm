@@ -6,7 +6,7 @@ import sys
 import time
 if sys.version_info<(3,0): import subprocess32 as subprocess
 else: import subprocess
-import _multiprocessing as mp
+import multiprocessing as mp
 
 def compress_fastq(fastq_path):
     l_start = time.time()
@@ -44,10 +44,12 @@ if args.out_dir is not None:
 else:
     if ext: out_dir = '/'.join(in_path.rsplit('/')[:-1])
     else:   out_dir = in_path+'/'
+if not os.path.exists(out_dir): os.mkdir(out_dir)
 if args.final_dir is not None:
     final_dir = args.final_dir
 else:
     final_dir = out_dir
+if not os.path.exists(final_dir): os.mkdir(final_dir)
 if args.bio_tools is not None:
     bio_tools = args.bio_tools
 else:
@@ -66,7 +68,7 @@ if __name__=='__main__':
         t_start = time.time()
         command = [bio_tools+'gatk','SamToFastq',"--java-options='-Xmx%sg'"%mem,
                    '--INPUT=%s'%sbcram,'--TMP_DIR=%s'%out_dir,'--OUTPUT_PER_RG=true',
-                   '--MAX_RECORDS_IN_RAM=1000000','--OUTPUT_DIR=%s'%out_dir]
+                   '--MAX_RECORDS_IN_RAM=1000000','--OUTPUT_DIR=%s'%final_dir]
         try: out = subprocess.check_output(' '.join(command),shell=True)
         except Exception as E: print(E)
         p1 = mp.Pool(processes=cpus)
