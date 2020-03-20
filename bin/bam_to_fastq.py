@@ -13,6 +13,10 @@ def compress_fastq(fastq_path,fastq_final):
     command = ['gzip -9 -c %s > %s'%(fastq_path,fastq_final)]
     try: out = subprocess.check_output(' '.join(command),shell=True)
     except Exception as E: out = str(E)
+    if len(glob.glob(fastq_path))>0:
+        command = ['rm',fastq_path]
+        try: out += subprocess.check_output(' '.join(command),shell=True)
+        except Exception as E: out += str(E)
     l_stop = time.time()
     return [out,round(l_stop-l_start,2)]
 
