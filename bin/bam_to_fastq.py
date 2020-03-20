@@ -16,6 +16,15 @@ def compress_fastq(fastq_path):
     l_stop = time.time()
     return [out,round(l_stop-l_start,2)]
 
+def convert_am_to_fastq(sbcram,out_dir,final_dir):
+    command = ['java -Xmx%sg -Dsamjdk.use_async_io_read_samtools=false -Dsamjdk.use_async_io_write_samtools=true'%mem,
+               '-Dsamjdk.use_async_io_write_tribble=false -Dsamjdk.compression_level=2',
+               '-jar %s/gatk-package-4*.jar SamToFastq'%bio_tools,'--INPUT=%s'%sbcram,'--OUTPUT_PER_RG=true',
+               '--MAX_RECORDS_IN_RAM=1000000','--TMP_DIR=%s'%out_dir,'--OUTPUT_DIR=%s'%final_dir]
+    try: out = subprocess.check_output(' '.join(command),shell=True)
+    except Exception as E: print(E)
+    return out
+
 # || return data structure: async queue
 result_list = []
 def collect_results(result):
@@ -29,7 +38,8 @@ parser.add_argument('-i', '--in_path',type=str,help='sam/bam/cram file or input 
 parser.add_argument('-o', '--out_dir',type=str,help='fastq output directory\t[None]')
 parser.add_argument('-f', '--final_dir',type=str,help='final fastq.gz directory\t[None]')
 parser.add_argument('-M', '--mem',type=int,help='memory to allocate\t[None]')
-parser.add_argument('-P', '--cpus',type=int,help='number of cpus to launch gzip\t[None]')
+parser.add_argument('-S', '--samples',type=int,help='number of samples to read from\t[None]')
+parser.add_argument('-G', '--gzip',type=int,help='number of gzip decompressions to use\t[None]')
 parser.add_argument('-t', '--bio_tools',type=str,help='path to the gatk/picardtools binary\t[]')
 args = parser.parse_args()
 
@@ -38,6 +48,7 @@ if args.in_path is not None:
     ext = in_path.endswith('.sam') or in_path.endswith('.bam') or in_path.endswith('.cram')
     if ext: sbcrams = [in_path]
     else:   sbcrams = glob.glob(in_path+'/*.sam')+glob.glob(in_path+'/*.bam')+glob.glob(in_path+'/*.cram')
+    sbcrams = sorted(sbcrams)
 else: raise IOError
 if args.out_dir is not None:
     out_dir = args.out_dir
@@ -58,30 +69,43 @@ if args.mem is not None:
     mem = args.mem
 else:
     mem = 16
-if args.cpus is not None:
-    cpus = args.cpus
+if args.samples is not None:
+    samples = args.samples
 else:
-    cpus = 4
+    samples = 1
+if args.gzip is not None:
+    gzip = args.gzip
+else:
+    gzip = 4
 
 if __name__=='__main__':
-    for sbcram in sorted(sbcrams):
-        t_start = time.time()
-        command = ['java -Xmx%sg -Dsamjdk.use_async_io_read_samtools=false -Dsamjdk.use_async_io_write_samtools=true'%mem,
-                   '-Dsamjdk.use_async_io_write_tribble=false -Dsamjdk.compression_level=2',
-                   '-jar %s/gatk-package-4.1.5.0-local.jar SamToFastq'%bio_tools,'--INPUT=%s'%sbcram,'--OUTPUT_PER_RG=true',
-                   '--MAX_RECORDS_IN_RAM=1000000','--TMP_DIR=%s'%out_dir,'--OUTPUT_DIR=%s'%final_dir]
-        try: out = subprocess.check_output(' '.join(command),shell=True)
-        except Exception as E: print(E)
-        p1 = mp.Pool(processes=cpus)
-        for fastq_path in glob.glob(out_dir+'/*.fastq'):
-            p1.apply_async(compress_fastq,
-                           args=(fastq_path),
+    t_start = time.time()
+    jobs = []
+    for i in range(0,len(sbcrams),samples):
+        jobs += [[sbcrams[j] for j in range(i,min(i+samples,len(sbcrams)),1)]]
+    p1 = mp.Pool(processes=samples)
+    p2 = mp.Pool(processes=gzip)
+    for job in jobs:
+        print('starting job:%s'%job)
+        for sbcram in job:
+            p1.apply_async(convert_am_to_fastq,
+                           args=(sbcram,out_dir,final_dir),
                            callback=collect_results)
             time.sleep(0.25)
         p1.close()
         p1.join()
-        results = []
-        for result in result_list: results += [result]
-        print(results)
-        t_stop = time.time()
-        print('file=%s completed in %s sec'%(sbcram,round(t_stop-t_start,2)))
+        print('finished %s conversions'%len(job))
+        gzips = glob.glob(out_dir+'/*.fastq')
+        for fastq_path in gzips:
+            p2.apply_async(compress_fastq,
+                           args=(fastq_path),
+                           callback=collect_results)
+            time.sleep(0.25)
+        p2.close()
+        p2.join()
+        print('finished %s gzips'%len(gzips))
+    results = []
+    for result in result_list: results += [result]
+    print(results)
+    t_stop = time.time()
+    print('file=%s completed in %s sec'%(sbcram,round(t_stop-t_start,2)))
