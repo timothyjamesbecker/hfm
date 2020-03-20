@@ -22,7 +22,7 @@ def compress_fastq(fastq_path,fastq_final):
 
 def convert_am_to_fastq(sbcram,out_dir,mem,bio_tools):
     l_start = time.time()
-    command = ['java -Xmx%sg -Dsamjdk.use_async_io_read_samtools=false -Dsamjdk.use_async_io_write_samtools=true'%mem,
+    command = ['java -Xmx%sg -Dsamjdk.use_async_io_read_samtools=true -Dsamjdk.use_async_io_write_samtools=true'%mem,
                '-Dsamjdk.use_async_io_write_tribble=false -Dsamjdk.compression_level=2',
                '-jar %s/gatk-package-4.1.5.0-local.jar SamToFastq'%bio_tools,'--INPUT=%s'%sbcram,'--OUTPUT_PER_RG=true',
                '--MAX_RECORDS_IN_RAM=1000000','--TMP_DIR=%s'%out_dir,'--OUTPUT_DIR=%s'%out_dir]
