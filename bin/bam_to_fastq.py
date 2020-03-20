@@ -16,14 +16,16 @@ def compress_fastq(fastq_path):
     l_stop = time.time()
     return [out,round(l_stop-l_start,2)]
 
-def convert_am_to_fastq(sbcram,out_dir,final_dir):
+def convert_am_to_fastq(sbcram,out_dir,final_dir,mem,bio_tools):
+    l_start = time.time()
     command = ['java -Xmx%sg -Dsamjdk.use_async_io_read_samtools=false -Dsamjdk.use_async_io_write_samtools=true'%mem,
                '-Dsamjdk.use_async_io_write_tribble=false -Dsamjdk.compression_level=2',
-               '-jar %s/gatk-package-4*.jar SamToFastq'%bio_tools,'--INPUT=%s'%sbcram,'--OUTPUT_PER_RG=true',
+               '-jar %s/gatk-package-4.1.5.0-local.jar SamToFastq'%bio_tools,'--INPUT=%s'%sbcram,'--OUTPUT_PER_RG=true',
                '--MAX_RECORDS_IN_RAM=1000000','--TMP_DIR=%s'%out_dir,'--OUTPUT_DIR=%s'%final_dir]
     try: out = subprocess.check_output(' '.join(command),shell=True)
-    except Exception as E: print(E)
-    return out
+    except Exception as E: out = str(E)
+    l_stop = time.time()
+    return [out,round(l_stop-l_start,2)]
 
 # || return data structure: async queue
 result_list = []
@@ -89,7 +91,7 @@ if __name__=='__main__':
         print('starting job:%s'%job)
         for sbcram in job:
             p1.apply_async(convert_am_to_fastq,
-                           args=(sbcram,out_dir,final_dir),
+                           args=(sbcram,out_dir,final_dir,mem,bio_tools),
                            callback=collect_results)
             time.sleep(0.25)
         p1.close()
