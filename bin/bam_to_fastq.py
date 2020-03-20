@@ -8,20 +8,20 @@ if sys.version_info<(3,0): import subprocess32 as subprocess
 else: import subprocess
 import multiprocessing as mp
 
-def compress_fastq(fastq_path):
+def compress_fastq(fastq_path,fastq_final):
     l_start = time.time()
-    command = ['gzip -9 %s'%fastq_path]
+    command = ['gzip -9 -c %s > %s'%(fastq_path,fastq_final)]
     try: out = subprocess.check_output(' '.join(command),shell=True)
     except Exception as E: out = str(E)
     l_stop = time.time()
     return [out,round(l_stop-l_start,2)]
 
-def convert_am_to_fastq(sbcram,out_dir,final_dir,mem,bio_tools):
+def convert_am_to_fastq(sbcram,out_dir,mem,bio_tools):
     l_start = time.time()
     command = ['java -Xmx%sg -Dsamjdk.use_async_io_read_samtools=false -Dsamjdk.use_async_io_write_samtools=true'%mem,
                '-Dsamjdk.use_async_io_write_tribble=false -Dsamjdk.compression_level=2',
                '-jar %s/gatk-package-4.1.5.0-local.jar SamToFastq'%bio_tools,'--INPUT=%s'%sbcram,'--OUTPUT_PER_RG=true',
-               '--MAX_RECORDS_IN_RAM=1000000','--TMP_DIR=%s'%out_dir,'--OUTPUT_DIR=%s'%final_dir]
+               '--MAX_RECORDS_IN_RAM=1000000','--TMP_DIR=%s'%out_dir,'--OUTPUT_DIR=%s'%out_dir]
     try: out = subprocess.check_output(' '.join(command),shell=True)
     except Exception as E: out = str(E)
     l_stop = time.time()
@@ -91,7 +91,7 @@ if __name__=='__main__':
         print('starting job:%s'%job)
         for sbcram in job:
             p1.apply_async(convert_am_to_fastq,
-                           args=(sbcram,out_dir,final_dir,mem,bio_tools),
+                           args=(sbcram,out_dir,mem,bio_tools),
                            callback=collect_results)
             time.sleep(0.25)
         p1.close()
@@ -99,8 +99,9 @@ if __name__=='__main__':
         print('finished %s conversions'%len(job))
         gzips = glob.glob(out_dir+'/*.fastq')
         for fastq_path in gzips:
+            fastq_final = final_dir+'/'+fastq_path.rsplit('/')[1]
             p2.apply_async(compress_fastq,
-                           args=(fastq_path),
+                           args=(fastq_path,fastq_final),
                            callback=collect_results)
             time.sleep(0.25)
         p2.close()
