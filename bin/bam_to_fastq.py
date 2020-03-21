@@ -103,7 +103,7 @@ if __name__=='__main__':
         print('finished %s conversions'%len(job))
         gzips = glob.glob(out_dir+'/*.fastq')
         for fastq_path in gzips:
-            fastq_final = final_dir+'/'+fastq_path.rsplit('/')[1]
+            fastq_final = final_dir+'/'+fastq_path.rsplit('/')[-1]+'.gz'
             p2.apply_async(compress_fastq,
                            args=(fastq_path,fastq_final),
                            callback=collect_results)
