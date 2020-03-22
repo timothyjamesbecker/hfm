@@ -46,7 +46,8 @@ parser.add_argument('-f', '--final_dir',type=str,help='final fastq.gz directory\
 parser.add_argument('-M', '--mem',type=int,help='memory to allocate\t[None]')
 parser.add_argument('-S', '--samples',type=int,help='number of samples to read from\t[None]')
 parser.add_argument('-G', '--gzip',type=int,help='number of gzip decompressions to use\t[None]')
-parser.add_argument('-t', '--bio_tools',type=str,help='path to the gatk/picardtools binary\t[]')
+parser.add_argument('--offset',type=int,help='number of samples to skip past assuming sorted order\t[None]')
+parser.add_argument('--bio_tools',type=str,help='path to the gatk/picardtools binary\t[]')
 args = parser.parse_args()
 
 if args.in_path is not None:
@@ -55,6 +56,8 @@ if args.in_path is not None:
     if ext: sbcrams = [in_path]
     else:   sbcrams = glob.glob(in_path+'/*.sam')+glob.glob(in_path+'/*.bam')+glob.glob(in_path+'/*.cram')
     sbcrams = sorted(sbcrams)
+    if args.offset is not None:
+        sbcrams = sbcrams[args.offset:]
 else: raise IOError
 if args.out_dir is not None:
     out_dir = args.out_dir
@@ -89,9 +92,9 @@ if __name__=='__main__':
     jobs = []
     for i in range(0,len(sbcrams),samples):
         jobs += [[sbcrams[j] for j in range(i,min(i+samples,len(sbcrams)),1)]]
-    p1 = mp.Pool(processes=samples)
-    p2 = mp.Pool(processes=gzip)
     for job in jobs:
+        p1 = mp.Pool(processes=samples)
+        p2 = mp.Pool(processes=gzip)
         print('starting job:%s'%job)
         for sbcram in job:
             p1.apply_async(convert_am_to_fastq,
