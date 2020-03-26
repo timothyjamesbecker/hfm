@@ -185,6 +185,7 @@ class HFM:
         self.__tile__      = tile                 #only tiles are stored
         self.__linear__    = linear               #flat array implies multiprocessing with ctypes
         self.A  = None                            #the recarray attach point
+        self.D  = None                            #the differential recarray attach point
         self.I  = None                            #the input shared memory buffer
         self.O  = None                            #the output shared memory buffer
         self.ap = None                            #pysam alignment path
@@ -348,7 +349,8 @@ class HFM:
     #into the shared memory buffers, perform feature generation
     #and then write write to hdf5 container with extraction metadata
     def extract_chunk(self, alignment_path, hdf5_path, sms, seq, start, end, 
-                      merge_rg=True,tracks=['total'],features=['moments'],verbose=False):
+                      merge_rg=True,tracks=['total'],features=['moments'],
+                      differential_alignment_path=None,differential_op='subtract',verbose=False):
         #PRE------------------------------------------------------------------------------------------------------PRE 
         self.__seq__ = list(seq.keys())[0]
         self.__len__ = seq[list(seq.keys())[0]]
@@ -358,6 +360,22 @@ class HFM:
         if len(features)==1 and features[0]=='all': features = self.__features__
         end = min(end,seq[list(seq.keys())[0]]) #correct any loads that are out of bounds
         self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,merge_rg) #dict, single loading
+        if differential_alignment_path is not None: #should only be used on the rg='all'
+            diff_sms = get_sam_sm(differential_alignment_path)
+            self.D = core.load_reads_all_tracks(differential_alignment_path,sms,self.__seq__,start,end,merge_rg)
+            if differential_op=='subtract':
+                for track in self.A:
+                    if track in self.D:
+                        if 'all' in self.A[track] and 'all' in self.D[track]:
+                            self.A[track]['all'][:] -= self.D[track]['all'][:]
+            elif differential_op=='fold':
+                for track in self.A:
+                    if track in self.D:
+                        if 'all' in self.A[track] and 'all' in self.D[track]:
+                            np.clip(self.D[track]['all'][:],0.0,1E9)
+                            self.D[track]['all'][:] += 1.0
+                            self.A[track]['all'][:] /= self.D[track]['all'][:]
+                            self.A[track]['all'][:] -= 1.0
         self.f = File(hdf5_path, 'a')
         #PRE------------------------------------------------------------------------------------------------------PRE
         #TILES--------------------------------------------------------------------------------------------------TILES

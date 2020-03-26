@@ -96,8 +96,10 @@ else:                         end_clean = True
 if args.seqs is not None:     seqs = args.seqs.split(',')
 else:                         seqs = 'all'
 if args.vectors is not None:  vect = args.vectors.split(',')
-else:                         vect = ['total','primary','discordant','orient_out','orient_same','orient_um','orient_chr','deletion','insertion',
-                                      'right_clipped','left_clipped','fwd_rev_diff','mapq_pp','mapq_dis','tlen_pp','tlen_dis','GC']
+else:                         vect = ['total','primary','discordant','orient_out','orient_same','orient_um','orient_chr','deletion','big_del',
+                                      'insertion','substitution','right_clipped','left_clipped','splice','fwd_rev_diff','mapq_pp','mapq_dis',
+                                      'tlen_pp','tlen_dis','tlen_dis_rd','tlen_pp_rd','tlen_rd','RD','GC',
+                                      'A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
 if args.features is not None: feat = args.features.split(',')
 else:                         feat = ['moments']
 if args.comp is not None: comp     = args.comp
