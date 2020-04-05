@@ -3,9 +3,14 @@ import glob
 import json
 import argparse
 import math
+import socket
 from h5py import File
 from aiohttp import web
 import numpy as np
+
+def port_in_use(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
 
 def read_json(path):
     data = {}
@@ -290,6 +295,13 @@ async def sm_seq_start_end_tiles_flank_h(request):
         W = {'err':'position coordinates were not found: %s:%s-%s'%(seq,start,end)}
     return web.json_response(W)
 
+#check port via sockets?------------------------------------
+port = 8080
+while(port_in_use(port)): port += 1
+with open('../client/client.js','r') as f: client = f.read().rsplit('\n')
+client[0] = client[0].rsplit('localhost')[0]+'localhost:%s;'%port
+with open('../client/client.js','w') as f: f.write('\n'.join(client))
+
 app = web.Application()
 app.router.add_get('/sample_map', sample_map_h)
 app.router.add_get('/gene_map', gene_map_h)
@@ -304,4 +316,4 @@ app.router.add_get('/sm/{sm}/gene/{gene}/tiles/{tiles}/flank/{flank}/axis/{axis}
 app.router.add_get('/sm/{sm}/seq/{seq}/start/{start}/end/{end}/tiles/{tiles}/flank/{flank}/axis/{axis}',sm_seq_start_end_tiles_flank_h)
 app.router.add_get('/sm/{sm}/trk/{trk}/seq/{seq}/start/{start}/end/{end}/tiles/{tiles}/flank/{flank}/axis/{axis}',sm_trk_seq_start_end_tiles_flank_h)
 app.router.add_static('/', path='../client/', name='client')
-web.run_app(app, host='127.0.0.1', port=8080)
+web.run_app(app, host='127.0.0.1', port=port)

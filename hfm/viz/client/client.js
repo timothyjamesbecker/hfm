@@ -1,4 +1,4 @@
-//globals that ajax call attach to
+var rest_host  = 'http://localhost:8080;
 var samples = null,
     sample_names = null,
     track_names = null,
@@ -13,8 +13,7 @@ var samples = null,
     xScale = null,
     xScale2 = null,
     xAxis = null,
-    brush = null,
-    rest_host  = 'http://localhost:8080';
+    brush = null;
 
 function genes_like(gene_stub){
     var search = [];

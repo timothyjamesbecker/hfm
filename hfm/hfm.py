@@ -18,6 +18,7 @@ import itertools as it
 import numpy as np
 from scipy import signal
 import multiprocessing as mp
+import pywt
 import pysam
 import core
 
@@ -344,12 +345,26 @@ class HFM:
     #given a tile which has start
     def tile_to_index(self,tile):
         return 0
-        
+
+    #filter raw features veofre summarizing them------------------------------
+    def wavelet_filter(self,data,wtype='dmey',thresh=0.1):
+        data[:] += 1.0
+        wlt,wlt_thr = pywt.Wavelet(wtype),np.mean(data)*thresh
+        maxlev = pywt.dwt_max_level(data.shape[0],wlt.dec_len)
+        wlt_cffs = pywt.wavedec(data,wtype,level=maxlev)
+        for i in range(1,len(wlt_cffs)):
+            try:
+                wlt_cffs[i] = pywt.threshold(wlt_cffs[i],wlt_thr*max(wlt_cffs[i]))
+            except ValueError as E:
+                wlt_cffs[i] = np.zeros(wlt_cffs[i].shape[0],dtype='f8')
+        data[:] = pywt.waverec(wlt_cffs,wtype)[:data.shape[0]]
+        data[:] -= 1.0
+
     #default track is reads_all or total coverage from an alignment file
     #into the shared memory buffers, perform feature generation
     #and then write write to hdf5 container with extraction metadata
     def extract_chunk(self, alignment_path, hdf5_path, sms, seq, start, end, 
-                      merge_rg=True,tracks=['total'],features=['moments'],
+                      merge_rg=True,tracks=['total'],features=['moments'],filter_params=None,
                       differential_alignment_path=None,differential_op='subtract',verbose=False):
         #PRE------------------------------------------------------------------------------------------------------PRE 
         self.__seq__ = list(seq.keys())[0]
@@ -359,7 +374,21 @@ class HFM:
         if len(tracks)==1 and tracks[0]=='all':     tracks = self.__tracks__
         if len(features)==1 and features[0]=='all': features = self.__features__
         end = min(end,seq[list(seq.keys())[0]]) #correct any loads that are out of bounds
-        self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,merge_rg) #dict, single loading
+        dna_trans = ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
+        if any([t in tracks for t in dna_trans]):
+            self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,merge_rg,dna=True)
+            if filter_params is not None:
+                if verbose: print('filter=%s for start=%s end=%s'%(filter_params,start,end))
+                for track in self.A:
+                    for rg in self.A[track]:
+                        self.wavelet_filter(self.A[track][rg],filter_params['type'],filter_params['thresh'])
+        else:
+            self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,merge_rg,dna=False) #dict, single loading
+            if filter_params is not None:
+                if verbose: print('filter=%s start=%s end=%s'%(filter_params,start,end))
+                for track in self.A:
+                    for rg in self.A[track]:
+                        self.wavelet_filter(self.A[track][rg],filter_params['type'],filter_params['thresh'])
         if differential_alignment_path is not None: #should only be used on the rg='all'
             diff_sms = get_sam_sm(differential_alignment_path)
             self.D = core.load_reads_all_tracks(differential_alignment_path,sms,self.__seq__,start,end,merge_rg)
@@ -373,7 +402,8 @@ class HFM:
                     if track in self.D:
                         if 'all' in self.A[track] and 'all' in self.D[track]:
                             np.clip(self.D[track]['all'][:],0.0,1E9)
-                            self.D[track]['all'][:] += 1.0
+                            self.A[track]['all'][:] = np.clip(self.A[track]['all'][:],1.0,1.0*self.__len__*self.__max_depth__)
+                            self.D[track]['all'][:] = np.clip(self.D[track]['all'][:],1.0,1.0*self.__len__*self.__max_depth__)
                             self.A[track]['all'][:] /= self.D[track]['all'][:]
                             self.A[track]['all'][:] -= 1.0
         self.f = File(hdf5_path, 'a')
@@ -608,7 +638,8 @@ class HFM:
 
     #|| on each seq into mp pool
     def extract_seq(self,alignment_path,base_name,sms,seq,
-                    merge_rg=True,tracks=['total'],features=['moments'],verbose=False):
+                    merge_rg=True,tracks=['total'],features=['moments'],filter_params=None,
+                    differential_alignment_path=None,differential_op='subtract',verbose=False):
         k = list(seq.keys())[0]
         passes = int(k//int(self.__chunk__))
         last   = int(k%int(self.__chunk__))
@@ -619,7 +650,9 @@ class HFM:
         x = 0
         for i in range(len(chunks)):
             self.extract_chunk(alignment_path,base_name+'.seq.'+seq[k]+'.hdf5',sms,{seq[k]:k},x,x+chunks[i]+self.__window__, 
-                               merge_rg=merge_rg,tracks=tracks,features=features,verbose=False)
+                               merge_rg=merge_rg,tracks=tracks,features=features,filter_params=filter_params,
+                               differential_alignment_path=differential_alignment_path,
+                               differential_op=differential_op,verbose=verbose)
             x += chunks[i]
         return True
 
