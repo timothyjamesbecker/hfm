@@ -1,4 +1,4 @@
-var rest_host  = 'http://localhost:8080;
+var rest_host  = 'http://localhost:8080';
 var samples = null,
     sample_names = null,
     track_names = null,
@@ -97,7 +97,7 @@ function cor_moments(X,Y){
 }
 
 function clear_sm(sm){
-    d3.select('#div_'+sm).text(''); //clear existing tracks
+    d3.select('[id="div_'+sm+'"]').text(''); //clear existing tracks
 }
 
 function sm_order(sms,sm){
@@ -274,9 +274,9 @@ function render_tracks(view,sm){ //main method for new gene/pos query will refre
         var extrema = normalized['E'];
 
         //add new sample and track divs=============================
-        d3.select('#div_'+sm).append('div')
+        d3.select('[id="div_'+sm+'"]').append('div')
             .attr('id','div_'+sm+'_'+trk);
-        var svg = d3.select('#div_'+sm+'_'+trk).append('svg')
+        var svg = d3.select('[id="div_'+sm+'_'+trk+'"]').append('svg')
             .attr('width',width)
             .attr('height',height)
             .attr('id','svg_'+sm+'_'+trk)

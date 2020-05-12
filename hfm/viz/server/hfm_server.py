@@ -299,7 +299,7 @@ async def sm_seq_start_end_tiles_flank_h(request):
 port = 8080
 while(port_in_use(port)): port += 1
 with open('../client/client.js','r') as f: client = f.read().rsplit('\n')
-client[0] = client[0].rsplit('localhost')[0]+'localhost:%s;'%port
+client[0] = client[0].rsplit('localhost')[0]+"localhost:%s';"%port
 with open('../client/client.js','w') as f: f.write('\n'.join(client))
 
 app = web.Application()

@@ -46,13 +46,13 @@ def get_version():
             if line.startswith('__version__'):
                 return literal_eval(line.partition('=')[2].lstrip())
     raise ValueError("__version__ not found")
-cythonize('hfm/core.pyx',language_level=2)
+cythonize('hfm/core.pyx',language_level=3)
 extensions = [Extension('core',
                         sources=['hfm/core.pyx'],
                         libraries=['m'],
                         include_dirs=pysam.get_include() + [numpy.get_include()],
                         define_macros=pysam.get_defines(),
-                        extra_compile_args=['-ffast-math'])]
+                        extra_compile_args=['-ffast-math','-O3'])]
 setup(
     name = 'hfm',
     version=get_version(),
@@ -63,7 +63,7 @@ setup(
     description='Exact Hierarchical Feature Moment Extraction for Analysis and Visualization of Omic Data',
     classifiers=['Intended Audience :: Developers',
                  'License :: GPL 3 License',
-                 'Programming Language :: Python :: 2.7',
+                 'Programming Language :: Python :: 3.6',
                  'Programming Language :: Cython',
                  'Programming Language :: C',
                  'Operating System :: POSIX',

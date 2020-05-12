@@ -1,4 +1,4 @@
-#Copyright (C) 2019 Timothy James Becker
+#Copyright (C) 2019-2020 Timothy James Becker
 #OO class that enables OOC || feature extraction via shared memory buffers R/W into hdf5 stores
 #arrays are all assumed to be flat ctypes for use with multiprocessing without a GIL
 #workflow is to have the chroms you want, some parameters for analysis and then
@@ -10,15 +10,14 @@
 import os
 import ctypes
 from h5py import File
-import json
 import math
 import glob
-import time
-import itertools as it
 import numpy as np
-from scipy import signal
-import multiprocessing as mp
 import pywt
+from scipy import ndimage as ndi
+from skimage import restoration as res
+from sklearn import cluster as cst
+import multiprocessing as mp
 import pysam
 import core
 
@@ -127,6 +126,23 @@ def get_hdf5_attrs(hdf5_path):
                         S[sm][rg][seq][w][k] = f[sm][rg][seq][trk][ftr][w].attrs[k]
     return S
 
+def rename_sample(hdf5_in,hdf5_out,sm):
+    in_f = File(hdf5_in,'r')
+    out_f = File(hdf5_out,'w')
+    for sample in in_f:
+        print('reading sample %s'%sample)
+        for rg in in_f[sample]:
+            for seq in in_f[sample][rg]:
+                for track in in_f[sample][rg][seq]:
+                    for feature in in_f[sample][rg][seq][track]:
+                        g_path = '/'.join([sample,rg,seq,track,feature]) #/sample/rg/seq/track: features...
+                        g_id = out_f.require_group('/'.join([sm,rg,seq,track]))
+                        print('copying %s file\n\tg_path=%s'%(hdf5_in,g_path))
+                        in_f.copy(g_path,g_id,name=feature)
+    in_f.close()
+    out_f.close()
+    return True
+
 #given a bunch of hdf5s done in ||, merge into one
 #may have to midfiy for multi window version...
 def merge_seqs(hdf5_dir, hdf5_out):
@@ -176,8 +192,7 @@ def merge_samples(hdf5_dir,hdf5_out):
 #add some metadata information abut the type of data: WGS, WES, RNA-seq, CHIAPET, etc... 
 class HFM:
     def __init__(self,window=int(1E2),window_branch=0,window_root=0,chunk=int(1E6),max_depth=int(1E4),
-                 bins=None,tile=True,fast=True,linear=False,compression='gzip',ratio=9,
-                 fr_path=None,gw_path=None):
+                 bins=None,tile=True,fast=True,linear=False,compression='gzip',ratio=9):
         self.__max_depth__     = np.uint32(max_depth)     #saturate counts after this value
         self.__window__        = np.uint32(window)        #base window size
         self.__window_branch__ = np.uint32(window_branch) #branch factor each level
@@ -206,10 +221,11 @@ class HFM:
         self.__M1__,self.__M2__,self.__M3__,self.__M4__ = [x for x in range(8)]
         self.__MN__,self.__SN__,self.__TN__ = 8,len(self.__bins__)-1,len(self.__bins__)-1
         self.__moments__  = ['N','SUM','MIN','MAX','M1','M2','M3','M4']
-        self.__tracks__   = ['total','proper_pair','discordant','primary','alternate',
-                             'orient_same','orient_out','orient_um','orient_chr',
-                             'clipped','deletion','insertion','substitution','fwd_rev_diff',
-                             'mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','GC']
+        self.__tracks__   = ['total','primary','mapq','RD','MD','discordant','fwd_rev_diff',
+                             'right_clipped','left_clipped','big_del','insertion','substitution',
+                             'tlen','tlen_rd','orient_same','orient_out','orient_um','orient_chr',
+                             'smap_same','smap_diff','left_smap_same','left_smap_diff',
+                             'right_smap_same','right_smap_diff']
         self.__features__ = ['moments','spectrum','transitions']
         self.__buffer__ = None
 
@@ -347,25 +363,55 @@ class HFM:
         return 0
 
     #filter raw features veofre summarizing them------------------------------
-    def wavelet_filter(self,data,wtype='dmey',thresh=0.1):
-        data[:] += 1.0
-        wlt,wlt_thr = pywt.Wavelet(wtype),np.mean(data)*thresh
-        maxlev = pywt.dwt_max_level(data.shape[0],wlt.dec_len)
-        wlt_cffs = pywt.wavedec(data,wtype,level=maxlev)
-        for i in range(1,len(wlt_cffs)):
-            try:
-                wlt_cffs[i] = pywt.threshold(wlt_cffs[i],wlt_thr*max(wlt_cffs[i]))
-            except ValueError as E:
-                wlt_cffs[i] = np.zeros(wlt_cffs[i].shape[0],dtype='f8')
-        data[:] = pywt.waverec(wlt_cffs,wtype)[:data.shape[0]]
-        data[:] -= 1.0
+    def filter(self,data,type='tv',value=0.1,width=int(1E4),over=0,mix=0.5):
+        if np.sum(data)>0.0:
+            data[:] += 1.0
+            ds = data.shape[0]
+            width = min(width,ds)     #can't make it smaller than the given window...
+            over  = min(over,width-1) #can't have overlap larger than width
+            f_ws,x = [],0
+            for i in range(ds//(width-over)):
+                f_ws += [[x,min(x+width,ds)]]
+                x += width-over
+            if f_ws[len(f_ws)-1][1]<ds: f_ws += [[f_ws[len(f_ws)-1][1]-over,ds]]
+            for f_w in f_ws:
+                if type=='tv':
+                    data[f_w[0]:f_w[1]] = mix*res.denoise_tv_chambolle(data[f_w[0]:f_w[1]],
+                                                                       weight=np.mean(data[f_w[0]:f_w[1]])*value,
+                                                                       n_iter_max=100,
+                                                                       eps=0.001)+(1.0*mix)*data[f_w[0]:f_w[1]]
+                elif type=='median':
+                    x = int(50*round(self.__window__*value))
+                    data[f_w[0]:f_w[1]] = mix*ndi.median_filter(data[f_w[0]:f_w[1]],size=(x+1 if x%2==0 else x))+(1.0*mix)*data[f_w[0]:f_w[1]]
+                elif type=='km_clust':
+                    if value>1.0: value = 1.0
+                    if value<0.0: value = 0.0
+                    l_data = np.copy(data[f_w[0]:f_w[1]])
+                    l_data = l_data.reshape(l_data.shape[0],1)
+                    km     = cst.KMeans(n_clusters=max(2,int(2*value)),max_iter=100,n_jobs=1)
+                    clust  = km.fit(l_data).labels_
+                    cc = [[0,0,clust[0]]]
+                    for i in range(1,len(clust),1):
+                        if clust[i]==cc[-1][2]: cc[-1][1]=i
+                        else:                   cc += [[i,i,clust[i]]]
+                    for c in cc:
+                        l_data[c[0]:c[1]+1,0] = mix*np.mean(data[f_w[0]+c[0]:f_w[0]+c[1]+1])+(1.0*mix)*data[f_w[0]+c[0]:f_w[0]+c[1]+1]
+                    data[f_w[0]:f_w[1]] = l_data.reshape((l_data.shape[0],))
+                elif type in pywt.wavelist():
+                    if sum(data[f_w[0]:f_w[1]])>0.0:
+                        wlt,wlt_thr = pywt.Wavelet(type),np.mean(data[f_w[0]:f_w[1]])*(1.0-value)
+                        maxlev = pywt.dwt_max_level(f_w[1]-f_w[0],wlt.dec_len)
+                        wlt_cffs = pywt.wavedec(data[f_w[0]:f_w[1]],type, level=maxlev)
+                        for i in range(1,len(wlt_cffs)): wlt_cffs[i] = pywt.threshold(wlt_cffs[i],wlt_thr*max(wlt_cffs[i]))
+                        data[f_w[0]:f_w[1]] = mix*pywt.waverec(wlt_cffs,type)[:f_w[1]-f_w[0]]+(1.0*mix)*data[f_w[0]:f_w[1]]
+            data[:] -= 1.0
 
     #default track is reads_all or total coverage from an alignment file
     #into the shared memory buffers, perform feature generation
     #and then write write to hdf5 container with extraction metadata
-    def extract_chunk(self, alignment_path, hdf5_path, sms, seq, start, end, 
-                      merge_rg=True,tracks=['total'],features=['moments'],filter_params=None,
-                      differential_alignment_path=None,differential_op='subtract',verbose=False):
+    def extract_chunk(self,alignment_path,hdf5_path,sms,seq,start,end,
+                      merge_rg=True,exact_sub=False,tracks=['total'],features=['moments'],filter_params=None,
+                      ref_seq=None,min_smapq=20,differential_alignment_path=None,differential_op='subtract',verbose=False):
         #PRE------------------------------------------------------------------------------------------------------PRE 
         self.__seq__ = list(seq.keys())[0]
         self.__len__ = seq[list(seq.keys())[0]]
@@ -376,20 +422,26 @@ class HFM:
         end = min(end,seq[list(seq.keys())[0]]) #correct any loads that are out of bounds
         dna_trans = ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
         if any([t in tracks for t in dna_trans]):
-            self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,merge_rg,dna=True)
+            self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,
+                                                merge_rg=merge_rg,dna=True,exact_sub=exact_sub,
+                                                ref_seq=ref_seq,min_smapq=min_smapq)
             if filter_params is not None:
                 if verbose: print('filter=%s for start=%s end=%s'%(filter_params,start,end))
                 for track in self.A:
                     for rg in self.A[track]:
-                        self.wavelet_filter(self.A[track][rg],filter_params['type'],filter_params['thresh'])
+                        self.filter(self.A[track][rg],type=filter_params['type'],value=filter_params['value'],
+                                    width=filter_params['width'],over=filter_params['over'],mix=filter_params['mix'])
         else:
-            self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,merge_rg,dna=False) #dict, single loading
+            self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,
+                                                merge_rg=merge_rg,dna=False,exact_sub=exact_sub,
+                                                ref_seq=ref_seq,min_smapq=min_smapq)
             if filter_params is not None:
                 if verbose: print('filter=%s start=%s end=%s'%(filter_params,start,end))
                 for track in self.A:
                     for rg in self.A[track]:
-                        self.wavelet_filter(self.A[track][rg],filter_params['type'],filter_params['thresh'])
-        if differential_alignment_path is not None: #should only be used on the rg='all'
+                        self.filter(self.A[track][rg],type=filter_params['type'],value=filter_params['value'],
+                                    width=filter_params['width'],over=filter_params['over'],mix=filter_params['mix'])
+        if differential_alignment_path is not None: #should only be used on the rg='all' and will need to add dna=>trans
             diff_sms = get_sam_sm(differential_alignment_path)
             self.D = core.load_reads_all_tracks(differential_alignment_path,sms,self.__seq__,start,end,merge_rg)
             if differential_op=='subtract':
@@ -638,8 +690,8 @@ class HFM:
 
     #|| on each seq into mp pool
     def extract_seq(self,alignment_path,base_name,sms,seq,
-                    merge_rg=True,tracks=['total'],features=['moments'],filter_params=None,
-                    differential_alignment_path=None,differential_op='subtract',verbose=False):
+                    merge_rg=True,exact_sub=False,tracks=['total'],features=['moments'],filter_params=None,
+                    ref_path=None,min_smapq=20,differential_alignment_path=None,differential_op='subtract',verbose=False):
         k = list(seq.keys())[0]
         passes = int(k//int(self.__chunk__))
         last   = int(k%int(self.__chunk__))
@@ -648,10 +700,14 @@ class HFM:
         chunks = [self.__chunk__ for y in range(passes)]+last
         if verbose: print('seq=%s\ttracks=%s\tfeatures=%s'%(seq,','.join(tracks),','.join(features)))
         x = 0
+        if ref_path is not None:
+            with pysam.FastaFile(ref_path) as f: ref_seq = f.fetch(seq[k])
+            if verbose: print('loaded fasta sequence=%s'%seq[k])
+        else:                                    ref_seq = None
         for i in range(len(chunks)):
             self.extract_chunk(alignment_path,base_name+'.seq.'+seq[k]+'.hdf5',sms,{seq[k]:k},x,x+chunks[i]+self.__window__, 
-                               merge_rg=merge_rg,tracks=tracks,features=features,filter_params=filter_params,
-                               differential_alignment_path=differential_alignment_path,
+                               merge_rg=merge_rg,exact_sub=exact_sub,tracks=tracks,features=features,filter_params=filter_params,
+                               ref_seq=ref_seq,min_smapq=min_smapq,differential_alignment_path=differential_alignment_path,
                                differential_op=differential_op,verbose=verbose)
             x += chunks[i]
         return True

@@ -1,8 +1,4 @@
 #!/usr/bin/env python
-#Copyright (C) 2019 Timothy James Becker
-#command line wrapper (and test script) for HFM class feature extraction of a bam file
-#bam files can have multiple sample tags (SM) each of which can have multiple rg tags (RG)
-#provisions for pooling reads at the read group level for each sample are provided
 
 #TESTING INFO:
 #./data directory tested with: 
@@ -27,25 +23,29 @@ from hfm import hfm
 #----------------------------
 
 des = """
-HFM: Exact Hierarchical Feature Moment/Spectrum/Transition
-Extraction for Analysis and Visualization
-Batch Extractor Tool """+str(hfm.core.__version__)+""", Copyright (C) 2019 Timothy James Becker"""
+HFE: Hierarchical [moment/spectrum/transition] Feature Extraction
+Multi-SAM|BAM|CRAM Batch Extractor Tool """+str(hfm.core.__version__)+""", Copyright (C) 2019-2020 Timothy James Becker"""
 parser = argparse.ArgumentParser(description=des,formatter_class=argparse.RawTextHelpFormatter)
-parser.add_argument('-i', '--in_path',type=str,help='sam/bam/cram file or input directory\t[None]')
-parser.add_argument('-r', '--ref_path',type=str,help='for cram inputs\t[None]')
-parser.add_argument('-o', '--out_dir',type=str,help='output directory\t[None]')
-parser.add_argument('-p', '--cpus',type=int,help='number of parallel core||readers (pools to sequences)\t[1]')
-parser.add_argument('-c', '--comp',type=str,help='compression type\t[lzf or gzip]')
-parser.add_argument('-n', '--no_merge_rg',action='store_true',help='do not merge all rg into one called "all"\t[False]')
-parser.add_argument('-w', '--window',type=int,help='window size in bp\t[100]')
-parser.add_argument('-b', '--branch',type=int,help='window branching factor\t[10]')
+parser.add_argument('--in_path',type=str,help='sam/bam/cram file or input directory\t[None]')
+parser.add_argument('--ref_path',type=str,help='for cram inputs and realignment based features\t[None]')
+parser.add_argument('--out_dir',type=str,help='output directory\t[None]')
+parser.add_argument('--filter',type=str,help='csv raw bp filter parameters\t[None]')
+parser.add_argument('--window',type=int,help='window size in bp\t[100]')
+parser.add_argument('--branch',type=int,help='window branching factor\t[10]')
+parser.add_argument('--chunk',type=float,help='chunk size in bp per cpu (controls MEM-use/speed)\t[10E6]')
+parser.add_argument('--min_smapq',type=int,help='minimum split mapq value for realigned clipped read fragment\t[20]')
 parser.add_argument('--bins',type=str,help='comma-seperated bin counting boundries for spectrum and transition features\t[None]')
+parser.add_argument('--no_merge_rg',action='store_true',help='do not merge all rg into one called "all"\t[False]')
 parser.add_argument('--slide',action='store_true',help='use 1-bp sliding windows of size w for features as opposed to tiles\t[False]')
-parser.add_argument('-s', '--seqs',type=str,help='comma seperated list of seqs that will be extracted, \t[all]')
-v = 'comma seperated list of vectors that will be extracted for each seq, all gives every available\t[total]'
-parser.add_argument('-v','--vectors',type=str,help=v)
-f = 'comma seperated list of features that will be calculated for each vector on each sequence, all gives every available\t[moments]'
-parser.add_argument('-f','--features',type=str,help=f)
+parser.add_argument('--dna',action='store_true',help='create nucleotide transition tracks\t[False]')
+parser.add_argument('--sub',action='store_true',help='exact ref_seq matching for substitution track\t[False]')
+parser.add_argument('--seqs',type=str,help='comma seperated list of seqs that will be extracted, \t[all in BAM header]')
+t_help = 'comma seperated list of tracks that will be extracted for each seq, all gives every available\t[see defaults]'
+parser.add_argument('--tracks',type=str,help=t_help)
+f_help = 'comma seperated list of features that will be calculated for each track on each sequence, all gives every available\t[moments]'
+parser.add_argument('--features',type=str,help=f_help)
+parser.add_argument('--cpus',type=int,help='number of parallel core||readers (pools to sequences)\t[1]')
+parser.add_argument('--comp',type=str,help='hdf5 block compression type\t[faster and larger lzf or slower and smaller gzip-9]')
 parser.add_argument('--test',action='store_true',help='will run the multisample.bam test file and save result in the out_dir')
 parser.add_argument('--reproc_dir',type=str,help='output directory for rebranching and retransforming hfm data from base windows\t[None]')
 parser.add_argument('--no_clean',action='store_true',help='will not check and cleans end points for rebranching operations\t[False]')
@@ -68,42 +68,52 @@ elif args.test:
     alignment_paths = [os.path.dirname(os.path.abspath(hfm.__file__)) + '/data/multisample.bam']
     hdf5_reproc_path = None
 elif (args.out_dir is not None) and (args.reproc_dir is not None) and (args.in_path is None): #have and out_dir and reproc_dir
-    print('using advanced reprocessing mode for rebranching and retransforming base windows of existing hfm data...')
+    print('using reprocessing mode for rebranching and retransforming base windows of existing base hfm data...')
     alignment_paths = []
     hdf5_reproc_path = args.reproc_dir
     hdf5_path = sorted(list(set(glob.glob(args.out_dir+'/*.hdf5')).difference(set(glob.glob(args.out_dir+'/*.reproc.hdf5')))))
     print('located the following hfm files for reprocessing: %s'%hdf5_path)
     if len(hdf5_path)<1:
-        print('using advanced reprocessing mode without any hfm data files...')
+        print('trying to use reprocessing mode without base hfm data files...')
         raise IOError
 else:
     print('no input directory was specified!\n')
     raise IOError
+if args.ref_path is None:     print('no reference fasta path was specified: realignment and substitution features are disabled...')
 if args.cpus is not None:     cpus = args.cpus
 else:                         cpus = 1
 if args.no_merge_rg:          merge_rg = False
 else:                         merge_rg = True
-if args.window is not None:   w    = args.window
-else:                         w    = 100
-if args.branch is not None:   w_b  = args.branch
-else:                         w_b  = 10
-if args.slide is not None:    tile = not args.slide
-else:                         tile = True
-if args.bins is not None:     bins = sorted(list(set([int(x) for x in args.bins.rsplit(',')])))
-else:                         bins = list(np.arange(0.0,1.0+1/25,1/25))
+if args.window is not None:   w     = args.window
+else:                         w     = 100
+if args.branch is not None:   w_b   = args.branch
+else:                         w_b   = 10
+if args.chunk is not None:    chunk = int(args.chunk)
+else:                         chunk = int(10E6)
+if args.min_smapq is not None:min_smapq = args.min_smapq
+else:                         min_smapq = 20
+if args.slide is not None:    tile  = not args.slide
+else:                         tile  = True
+if args.bins is not None:     bins  = sorted(list(set([int(x) for x in args.bins.rsplit(',')])))
+else:                         bins  = list(np.arange(0.0,1.0+1/25,1/25))
 if args.no_clean is None:     end_clean = args.no_clean
 else:                         end_clean = True
-if args.seqs is not None:     seqs = args.seqs.split(',')
-else:                         seqs = 'all'
-if args.vectors is not None:  vect = args.vectors.split(',')
-else:                         vect = ['total','primary','discordant','orient_out','orient_same','orient_um','orient_chr','deletion','big_del',
-                                      'insertion','substitution','right_clipped','left_clipped','splice','fwd_rev_diff','mapq_pp','mapq_dis',
-                                      'tlen_pp','tlen_dis','tlen_dis_rd','tlen_pp_rd','tlen_rd','RD','GC',
-                                      'A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
-if args.features is not None: feat = args.features.split(',')
-else:                         feat = ['moments']
-if args.comp is not None: comp     = args.comp
-else:                     comp     = 'gzip'
+if args.seqs is not None:     seqs  = args.seqs.split(',')
+else:                         seqs  = 'all'
+if args.tracks is not None:   trks  = args.tracks.split(',')
+else:                         trks  = ['total','primary','mapq','MD','discordant','fwd_rev_diff',
+                                       'right_clipped','left_clipped','deletion','big_del','insertion','substitution',
+                                       'tlen','tlen_rd','orient_same','orient_out','orient_um','orient_chr',
+                                       'smap_same','smap_diff','left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
+if args.dna:                  trks += ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
+if args.features is not None: feats = args.features.split(',')
+else:                         feats = ['moments']
+if args.filter is not None:   fltr_params = {'type':args.filter.split(',')[0],'value':float(args.filter.split(',')[1]),
+                                             'width':int(args.filter.split(',')[2]),'over':int(args.filter.split(',')[3]),
+                                             'mix':float(args.filter.split(',')[4])}
+else:                         fltr_params = None
+if args.comp is not None: comp      = args.comp
+else:                     comp      = 'gzip'
 
 # || return data structure: async queue
 result_list = []
@@ -111,22 +121,24 @@ def collect_results(result):
     result_list.append(result)
 
 #can call this in ||----------------------------------------------------------------
-def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,
-                tracks=['total'],features=['moments'],window=100,window_branch=10,
-                tile=True,tree=True,bins=None,comp='gzip',verbose=False):
+def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,exact_sub=False,
+                tracks=['total'],features=['moments'],filter_params=None,window=100,window_branch=10,chunk=int(10E6),
+                tile=True,tree=True,bins=None,comp='gzip',ref_path=None,min_smapq=20,verbose=False):
     result = ''
     start = time.time()
     samples = list(set([sms[k] for k in sms]))
-    chunk = max(window,window*(int(1E6/len(sms))/window))
+    corrected_chunk = int(max(window,window*(int(chunk//len(sms))//window)))
     try:
-        s = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
-                    window_root=int(1E9),bins=bins,chunk=chunk,compression=comp)
-        s.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,
-                      tracks=tracks,features=features,verbose=verbose)
+        h = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
+                    window_root=int(1E9),bins=bins,chunk=corrected_chunk,compression=comp)
+        print('built the hfm object for seq=%s'%seq)
+        h.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,exact_sub=exact_sub,
+                      tracks=tracks,features=features,filter_params=filter_params,
+                      ref_path=ref_path,min_smapq=min_smapq,verbose=verbose)
         print('seq %s extracted, starting window updates'%seq[list(seq.keys())[0]])
-        if tree: s.update_seq_tree(base_name,seq,verbose=verbose)
+        if tree and window_branch>1: h.update_seq_tree(base_name,seq,verbose=verbose)
     except Exception as E:
-        result = str(E)
+        result = E
         pass
     stop = time.time()
     return {seq[list(seq.keys())[0]]:stop-start,'result':result}
@@ -178,14 +190,15 @@ if type(hdf5_path)==str:
             t_start = time.time()
             p1 = mp.Pool(processes=cpus)
             print('determined the following rgs: %s'%sms)
-            print('starting %s samples with %s total rgs and merge_rg=%s\nv=%s\nf=%s\nw=%s\nb=%s\ntile=%s'%\
-                  (len(set(sms.values())),len(sms),merge_rg,vect,feat,w,w_b,tile))
+            print('starting %s samples with %s total rgs and merge_rg=%s\nt=%s\nf=%s\nw=%s\nb=%s\ntile=%s'%\
+                  (len(set(sms.values())),len(sms),merge_rg,trks,feats,w,w_b,tile))
             for seq in S: #|| on seq
                 if not os.path.exists(base_name+'.seq.'+seq[list(seq.keys())[0]]+'.hdf5'):
-                    p1.apply_async(process_seq,
-                                   args=(alignment_path,base_name,sms,seq,
-                                         merge_rg,vect,feat,w,w_b,tile,True,bins,comp,True),
-                                   callback=collect_results)
+                    seq_args = (alignment_path,base_name,sms,seq,
+                                merge_rg,args.sub,trks,feats,fltr_params,
+                                w,w_b,chunk,tile,True,bins,
+                                comp,args.ref_path,min_smapq,True)
+                    p1.apply_async(process_seq,args=seq_args,callback=collect_results)
                     time.sleep(0.25)
             p1.close()
             p1.join()
@@ -198,7 +211,7 @@ if type(hdf5_path)==str:
                 print(subprocess.check_output(' '.join(['rm','-rf',hdf5_path+'/seqs/']),shell=True)) #delete the seperate files
             else:
                 s = ''
-                for l in result_list: s += l['result']+'\n'
+                for l in result_list: s += str(l['result'])+'\n'
                 with open(base_name+'.error','w') as f: f.write(s)
             t_stop = time.time()
             print('sample %s || cython with %s cpus in %s sec'%(base_name,cpus,t_stop-t_start))

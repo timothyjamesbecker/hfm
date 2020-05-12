@@ -1,5 +1,5 @@
 #hfm/core.pyx
-#Copyright (C) 2020 Timothy James Becker
+#Copyright (C) 2019-2020 Timothy James Becker
 
 #c imports
 from libc.stdlib cimport malloc, free
@@ -13,7 +13,8 @@ cimport numpy as np
 #regular imports
 import math
 import numpy as np
-__version__ = '0.1.7'
+import mappy
+__version__ = '0.1.8'
 
 #feature defines
 cdef unsigned int N,SUM,MIN,MAX,M1,M2,M3,M4,FN
@@ -29,26 +30,68 @@ ctypedef float tinp_t;
 ctypedef float tout_t;
 #:::TO DO:::----------------------------------
 
+#this one is without a GIL and assumes that |c1|>=|c2|
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+@cython.wraparound(False)
+def edit_dist(const unsigned char[::1] c1, const unsigned char[::1] c2,
+              unsigned int w_mat=0, unsigned int w_ins=1, unsigned int w_del=1, unsigned int w_sub=1):
+    cdef unsigned int i,j,k,u,v,x,y,z
+    u,v,k = len(c1),len(c2),2
+    cdef np.ndarray[unsigned int, ndim=2] D = np.zeros([u+1,k], dtype=np.uint32)
+    for i in range(u+1):   D[i][0] = i
+    for j in range(v%k+1): D[0][j] = j
+    for j in range(1,v+1):
+        for i in range(1,u+1):
+            if c1[i-1] == c2[j-1]:
+                D[i][j%k] = D[i-1][(j-1)%k]+w_mat  #matching
+            else:                                  #mismatch, del, ins, sub
+                x,y,z = D[i-1][j%k]+w_del,D[i][(j-1)%k]+w_ins,D[i-1][(j-1)%k]+w_sub
+                if x<=y and x<=z:   D[i][j%k] = x
+                elif y<=x and y<=z: D[i][j%k] = y
+                else:               D[i][j%k] = z
+    return D[u][v%k]
+
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+@cython.wraparound(False)
+def edit_dist_str(str s1, str s2, list w=[1,1,1]):
+    cdef unsigned int i,j,k,u,v
+    u,v,k = len(s1),len(s2),2
+    if u<v: u,v,s1,s2 = v,u,s2,s1 #flip to longest of the two
+    cdef np.ndarray[unsigned int, ndim=2] D = np.zeros([u+1,k], dtype=np.uint32)
+    for i in range(u+1):   D[i][0] = i
+    for j in range(v%k+1): D[0][j] = j
+    for j in range(1,v+1):
+        for i in range(1,u+1):
+            if s1[i-1] == s2[j-1]:
+                D[i][j%k] = D[i-1][(j-1)%k] #matching
+            else:                           #mismatch, del, ins, sub
+                D[i][j%k] = min(D[i-1][j%k]+w[0],D[i][(j-1)%k]+w[1],D[i-1][(j-1)%k]+w[2])
+    return D[u][v%k]
+
 
 #use this for slightly faster default feature constructions using numpy broadcasting...
-#@cython.boundscheck(False)
-#@cython.nonecheck(False)
-#@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.nonecheck(False)
+@cython.wraparound(False)
 def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int end,
-                          bint merge_rg=True, bint dna=True,
-                          int min_anchor=36, int min_clip=18, int big_del=36):
-    cdef int            i,j,a,b,tid,mid,mapq,tlen,last,offset
+                          bint merge_rg=True, bint dna=False, bint exact_sub=False,
+                          str ref_seq = None, str align_preset = 'sr',
+                          int min_anchor=36, int min_clip=18, int min_smapq=20, int big_del=36):
+    cdef int            i,j,a,b,c,d,e,f,s1,s2,tid,mid,mapq,alen,rlen,aend,rend,tlen,last,offset
     cdef float          x,y,z
-    cdef str            t,v,rg,tag,track,sequence
+    cdef str            k,t,v,rg,tag,track,sequence
     cdef list           tags,cigar,cigar_list,dnas
-    cdef dict           C = {}
+    cdef dict           C,S,A
     cdef AlignmentFile  samfile
     cdef AlignedSegment read
-    rg     = 'all'
+    C,S,rg = {},{},'all'
     tracks = ['alternate','orient_same','orient_out','orient_um','orient_chr','right_anchor','left_anchor','splice',
               'right_clipped','left_clipped','clipped','big_del','deletion','insertion','substitution','fwd_rev_diff']
-    values = ['total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis',
-              'tlen_rd','orient_same_rd','orient_out_rd','RD','GC','MD']
+    values = ['total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis',
+              'tlen','tlen_pp','tlen_dis','tlen_rd','orient_same_rd','orient_out_rd','RD','GC','MD',
+              'smap_same','smap_diff','left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
     dna_trans = ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
     if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))} #duplicated from the safe lib
     for rg in sms:
@@ -59,26 +102,30 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             if v in C: C[v][rg] = np.zeros([end-start,], dtype=np.float32)+1.0
             else:      C[v] = {rg:np.zeros([end-start,], dtype=np.float32)+1.0}
         if dna:
-            for d in dna_trans:
-                if d in C: C[d][rg] = np.zeros([end-start], dtype=np.float32)
-                else:      C[d] = {rg:np.zeros([end-start], dtype=np.float32)}
+            for k in dna_trans:
+                if k in C: C[k][rg] = np.zeros([end-start], dtype=np.float32)
+                else:      C[k] = {rg:np.zeros([end-start], dtype=np.float32)}
+        S[rg] = {'L':[],'R':[]}
     samfile = AlignmentFile(alignment_path,'rb')
     for read in samfile.fetch(start=start,end=end,region=seq,until_eof=True):
         if read.reference_end is not None and not read.is_duplicate and not read.is_qcfail:
-            pos  = read.reference_start
-            aend = read.reference_end
-            qend = read.query_length+pos
+            pos   = read.pos
+            aend  = read.reference_end
+            alen  = aend-pos
+            sequence = read.query_sequence.upper()
+            rlen = min(read.rlen,len(sequence))
+            rend = pos+rlen
             tid  = read.reference_id
             tlen = read.template_length
             mid  = read.next_reference_id
             mapq = read.mapping_quality
-            if 0>pos-start:          a = 0           #clips to array start
-            else:                    a = pos-start   #in between start and end
-            if end-start<aend-start: b = end-start   #clips to array end
-            else:                    b = aend-start  #in between start and end
-            if end-start<qend-start: c = end-start   #clips to array end
-            else:                    c = qend-start  #in between start and end
-            sequence = read.query_sequence.upper()
+            cigar = read.cigartuples
+            c = (start-pos if start-pos>0 else 0)   #amount of lefthand array  boundry overange
+            d = (rend-end if rend-end>0 else 0)     #amount of righthand array boundry overage
+            if pos<start:            a = 0          #clips to array start
+            else:                    a = pos-start  #in between start and end
+            if end-start<rend-start: b = end-start  #clips to array end
+            else:                    b = rend-start #in between start and end
             if not merge_rg:                 #if read group tag merging is enabled, skip this part
                 tags = read.get_tags()       #all optional tags
                 for j in range(len(tags)):   #find the RG string in the read
@@ -134,87 +181,147 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
                     C['T-G'][rg][a:b]  += <float>(sequence.count('TG'))/<float>(len(sequence))
                     C['T-T'][rg][a:b]  += <float>(sequence.count('TT'))/<float>(len(sequence))
             #cigar ops based calculations---------------------
-            cigar = read.cigartuples
             if cigar is not None:
-                cigar = read.cigartuples
                 cigar_list,j = [],0
                 for i in range(len(cigar)):
-                    cigar_list += [(cigar[i][0],j,j+cigar[i][1])]
-                    j += cigar[i][1]
-                if len(cigar_list)>1:
-                    last = len(cigar_list)-1
+                    if cigar[i][0]!=1 and cigar[i][0]!=6:  #insert and pad do not move in the reference space
+                        e = min(j+cigar[i][1],rlen-d)        #saturates to right side sequence length
+                        if e>c:
+                            if j>c: cigar_list += [(cigar[i][0],j,e)]
+                            else:   cigar_list += [(cigar[i][0],c,e)]
+                        j = e
+                    else: cigar_list += [(cigar[i][0],j,j)]
+                if len(cigar_list)>0:
                     if cigar_list[0][0]==4 or cigar_list[0][0]==5: #'S' or 'H'
-                        e = a+cigar_list[0][1]
-                        f = a+cigar_list[0][2]
+                        e = min(a+cigar_list[0][1],b)
+                        f = min(a+cigar_list[0][2],b)
                         if f-e>=min_clip:
-                            C['clipped'][rg][e:f]                           += 1.0
+                            C['clipped'][rg][e:f]       += 1.0
                             C['left_clipped'][rg][e:f]  += 1.0
-                        if cigar_list[last][0]==0 or cigar_list[last][0]==7: #'M' or '='
-                            e = a+cigar_list[0][1]
-                            f = a+cigar_list[0][2]
+                            S[rg]['L'] += [[sequence[:cigar[0][1]],cigar,
+                                            pos+cigar[0][1],tlen,(-1 if read.is_reverse else 1)]]
+                        if cigar_list[len(cigar_list)-1][0]==0 or cigar_list[len(cigar_list)-1][0]==7: #'M' or '='
                             if f-e>=min_anchor:
                                 C['right_anchor'][rg][e:f] += 1.0
-                    elif cigar_list[last][0]==4 or cigar_list[last][0]==5: #'S' or 'H'
-                        e = a+cigar_list[0][1]
-                        f = a+cigar_list[0][2]
+                    if cigar_list[len(cigar_list)-1][0]==4 or cigar_list[len(cigar_list)-1][0]==5: #'S' or 'H'
+                        e = min(a+cigar_list[len(cigar_list)-1][1],b)
+                        f = min(a+cigar_list[len(cigar_list)-1][2],b)
                         if f-e>=min_clip:
-                            C['clipped'][rg][e:f]                           += 1.0
+                            C['clipped'][rg][e:f]       += 1.0
                             C['right_clipped'][rg][e:f] += 1.0
+                            S[rg]['R'] += [[sequence[cigar[len(cigar_list)-1][1]:],cigar,
+                                            pos-cigar[len(cigar_list)-1][1],tlen,(-1 if read.is_reverse else 1)]]
                         if cigar_list[0][0]==0 or cigar_list[0][0]==7: #'M'
-                            e = a+cigar_list[0][1]
-                            f = a+cigar_list[0][2]
                             if f-e>=min_anchor:
                                 C['left_anchor'][rg][e:f] += 1.0
-                    else:
+                    if ref_seq is not None and exact_sub:
                         for i in range(len(cigar_list)):
-                            e = a+cigar_list[0][1]
-                            f = a+cigar_list[0][2]
-                            if cigar_list[i][0]==1: C['insertion'][rg][e:f]    += 1.0
+                            e = min(a+cigar_list[i][1],b)
+                            f = min(a+cigar_list[i][2],b)
+                            if cigar_list[i][0]==1: C['insertion'][rg][e-1:f]  += 1.0  #single coordinates
                             if cigar_list[i][0]==2:
                                 C['deletion'][rg][e:f] += 1.0
-                                if f-e>=big_del:
-                                    C['big_del'][rg][e:f] += 1.0
+                                if f-e>=big_del:    C['big_del'][rg][e:f]      += 1.0
+                            if cigar_list[i][0]==3: C['splice'][rg][e:f]       += 1.0
+                            if cigar_list[i][0]==0 or cigar_list[i][0]==7: #check matches for subs
+                                for j in range(cigar_list[i][1],cigar_list[i][2],1):
+                                    if sequence[j]!=ref_seq[pos+j]: C['substitution'][rg][a+j-c] += 1.0
+                    else: #this is the more acurate exact matching algorithm-----------------------------
+                        for i in range(len(cigar_list)):
+                            e = min(a+cigar_list[i][1],b)
+                            f = min(a+cigar_list[i][2],b)
+                            if cigar_list[i][0]==1: C['insertion'][rg][e-1:f]  += 1.0  #single coordinates
+                            if cigar_list[i][0]==2:
+                                C['deletion'][rg][e:f] += 1.0
+                                if f-e>=big_del:    C['big_del'][rg][e:f]      += 1.0
                             if cigar_list[i][0]==8: C['substitution'][rg][e:f] += 1.0
                             if cigar_list[i][0]==3: C['splice'][rg][e:f]       += 1.0
             #cigar ops based calculations---------------------
-
     samfile.close()
     #'total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','len_diff','tlen_rd','big_del','RD','GC'
+    if ref_seq is not None: #minimap2=>mappy based soft-clipped re-alignment
+        al = mappy.Aligner(seq=ref_seq,preset=align_preset,n_threads=0)
+        print('aligning %s split read fragments to seq=%s from rgs=%s'%(sum([len(S[rg]) for rg in S]),seq,','.join(list(S.keys()))))
+        for rg in S:
+            A = {}
+            for k in S[rg]:
+                A[k] = []
+                for i in range(len(S[rg][k])):
+                    for hit in al.map(S[rg][k][i][0]):
+                        if hit.mapq>min_smapq: #decent mapq please placement probability of 0.99
+                            o_start  = S[rg][k][i][2]
+                            o_strand = S[rg][k][i][4]
+                            n_mapq   = hit.mapq   #certainty of the pos
+                            n_start  = hit.r_st   #reference start position
+                            n_end    = hit.r_en   #reference end position
+                            n_mlen   = hit.mlen   #length of the match
+                            n_strand = hit.strand #forward 1 or reverse -1
+                            if n_strand<0: n_start,n_end = n_end,n_start
+                            c_l      = n_start-o_start+1
+                            if c_l<0: o_start,n_start = n_start,o_start
+                            if abs(c_l)>n_mlen: #smap distance has to be further than the match length
+                                A[k] += [[o_start,n_start,c_l,n_strand==o_strand]]
+            print('%s split read fragments were aligned to seq=%s with mapq>%s'%(len(A),seq,min_smapq))
+            for k in A:
+                for i in range(len(A[k])):
+                    e = max(0,min(A[k][i][0]-start,end))
+                    f = max(0,min(A[k][i][1]-start,end))
+                    if e>f: f,e = e,f
+                    if A[k][i][3]:
+                        if k=='L': C['left_smap_same'][rg][e:f]  += 1.0
+                        else:      C['right_smap_same'][rg][e:f] += 1.0
+                        C['smap_same'][rg][e:f] += 1.0
+                    else:
+                        if k=='L': C['left_smap_diff'][rg][e:f]  += 1.0
+                        else:      C['right_smap_diff'][rg][e:f] += 1.0
+                        C['smap_diff'][rg][e:f] += 1.0
     if not merge_rg:
         for rg in sms:
-            C['RD'][rg]             = (2.0*C['primary'][rg])*(C['GC'][rg]/C['total'][rg])
-            C['MD'][rg]             = C['RD'][rg]*(np.clip((C['mapq'][rg]/C['total'][rg]-1.0)/60.0,0.0,1.0))
-            C['GC'][rg]             = C['GC'][rg]-1.0
-            C['mapq'][rg]           = C['mapq'][rg]/C['total'][rg]-1.0
-            C['mapq_pp'][rg]        = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
-            C['mapq_dis'][rg]       = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
-            C['tlen'][rg]           = C['tlen'][rg]/C['total'][rg]-1.0
-            C['tlen_rd'][rg]        = C['tlen_rd'][rg]/C['total'][rg]-1.0
-            C['orient_same_rd'][rg] = C['orient_same_rd'][rg]/C['total'][rg]-1.0
-            C['orient_out_rd'][rg]  = C['orient_out_rd'][rg]/C['total'][rg]-1.0
-            C['tlen_pp'][rg]        = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
-            C['tlen_dis'][rg]       = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
-            C['discordant'][rg]     = C['discordant'][rg]-1.0
-            C['proper_pair'][rg]    = C['proper_pair'][rg]-1.0
-            C['primary'][rg]        = C['primary'][rg]-1.0
-            C['total'][rg]          = C['total'][rg]-1.0
+            C['RD'][rg]              = (2.0*C['primary'][rg])*(C['GC'][rg]/C['total'][rg])
+            C['MD'][rg]              = C['RD'][rg]*(np.clip((C['mapq'][rg]/C['total'][rg]-1.0)/60.0,0.0,1.0))
+            C['GC'][rg]              = C['GC'][rg]-1.0
+            C['mapq'][rg]            = C['mapq'][rg]/C['total'][rg]-1.0
+            C['mapq_pp'][rg]         = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
+            C['mapq_dis'][rg]        = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
+            C['tlen'][rg]            = C['tlen'][rg]/C['total'][rg]-1.0
+            C['tlen_rd'][rg]         = C['tlen_rd'][rg]/C['total'][rg]-1.0
+            C['orient_same_rd'][rg]  = C['orient_same_rd'][rg]/C['total'][rg]-1.0
+            C['orient_out_rd'][rg]   = C['orient_out_rd'][rg]/C['total'][rg]-1.0
+            C['tlen_pp'][rg]         = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
+            C['tlen_dis'][rg]        = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
+            C['discordant'][rg]      = C['discordant'][rg]-1.0
+            C['proper_pair'][rg]     = C['proper_pair'][rg]-1.0
+            C['primary'][rg]         = C['primary'][rg]-1.0
+            C['total'][rg]           = C['total'][rg]-1.0
+            C['smap_same'][rg]       = C['smap_same'][rg]-1.0
+            C['smap_diff'][rg]       = C['smap_diff'][rg]-1.0
+            C['left_smap_same'][rg]  = C['left_smap_same'][rg]-1.0
+            C['left_smap_diff'][rg]  = C['left_smap_diff'][rg]-1.0
+            C['right_smap_same'][rg] = C['right_smap_same'][rg]-1.0
+            C['right_smap_diff'][rg] = C['right_smap_diff'][rg]-1.0
     else:
-        C['RD'][rg]             = (2.0*C['primary'][rg])*(C['GC'][rg]/C['total'][rg])
-        C['MD'][rg]             = C['RD'][rg]*(np.clip((C['mapq'][rg]/C['total'][rg]-1.0)/60.0,0.0,1.0))
-        C['GC'][rg]             = C['GC'][rg]-1.0
-        C['mapq'][rg]           = C['mapq'][rg]/C['total'][rg]-1.0
-        C['mapq_pp'][rg]        = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
-        C['mapq_dis'][rg]       = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
-        C['tlen'][rg]           = C['tlen'][rg]/C['total'][rg]-1.0
-        C['tlen_rd'][rg]        = C['tlen_rd'][rg]/C['total'][rg]-1.0
-        C['orient_same_rd'][rg] = C['orient_same_rd'][rg]/C['total'][rg]-1.0
-        C['orient_out_rd'][rg]  = C['orient_out_rd'][rg]/C['total'][rg]-1.0
-        C['tlen_pp'][rg]        = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
-        C['tlen_dis'][rg]       = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
-        C['discordant'][rg]     = C['discordant'][rg]-1.0
-        C['proper_pair'][rg]    = C['proper_pair'][rg]-1.0
-        C['primary'][rg]        = C['primary'][rg]-1.0
-        C['total'][rg]          = C['total'][rg]-1.0
+        C['RD'][rg]              = (2.0*C['primary'][rg])*(C['GC'][rg]/C['total'][rg])
+        C['MD'][rg]              = C['RD'][rg]*(np.clip((C['mapq'][rg]/C['total'][rg]-1.0)/60.0,0.0,1.0))
+        C['GC'][rg]              = C['GC'][rg]-1.0
+        C['mapq'][rg]            = C['mapq'][rg]/C['total'][rg]-1.0
+        C['mapq_pp'][rg]         = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
+        C['mapq_dis'][rg]        = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
+        C['tlen'][rg]            = C['tlen'][rg]/C['total'][rg]-1.0
+        C['tlen_rd'][rg]         = C['tlen_rd'][rg]/C['total'][rg]-1.0
+        C['orient_same_rd'][rg]  = C['orient_same_rd'][rg]/C['total'][rg]-1.0
+        C['orient_out_rd'][rg]   = C['orient_out_rd'][rg]/C['total'][rg]-1.0
+        C['tlen_pp'][rg]         = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
+        C['tlen_dis'][rg]        = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
+        C['discordant'][rg]      = C['discordant'][rg]-1.0
+        C['proper_pair'][rg]     = C['proper_pair'][rg]-1.0
+        C['primary'][rg]         = C['primary'][rg]-1.0
+        C['total'][rg]           = C['total'][rg]-1.0
+        C['smap_same'][rg]       = C['smap_same'][rg]-1.0
+        C['smap_diff'][rg]       = C['smap_diff'][rg]-1.0
+        C['left_smap_same'][rg]  = C['left_smap_same'][rg]-1.0
+        C['left_smap_diff'][rg]  = C['left_smap_diff'][rg]-1.0
+        C['right_smap_same'][rg] = C['right_smap_same'][rg]-1.0
+        C['right_smap_diff'][rg] = C['right_smap_diff'][rg]-1.0
     return C
 
 #[0] utilities
@@ -677,7 +784,7 @@ def merge_tiled_moments_target(double[::1] Y, double[::1] Z, unsigned int t, bin
     cdef double d1,d2,d3,d4,a_n,a_m1,a_m2,a_m3,a_m4,b_n,b_m1,b_m2,b_m3,b_m4
     cdef np.ndarray[double, ndim=1] T = np.zeros([FN,], dtype=np.float64)
     if t>1 and Y[0]>0:
-        y = <unsigned int>len(Y)/FN#len of features, window, targeted window multiple
+        y = <unsigned int>len(Y)//FN#len of features, window, targeted window multiple
         if disjoint: #---------------------------------------------------------------
             for i in range(0,y-t,t):
                 for j in range(FN): T[j] = Y[FN*i+j] #grab first of the disjoint tiles
@@ -700,7 +807,7 @@ def merge_tiled_moments_target(double[::1] Y, double[::1] Z, unsigned int t, bin
                     T[M4]  = a_m4 + b_m4 + d4*a_n*b_n*(a_n**2 - a_n*b_n + b_n**2)/(T[N]**3) \
                              + <double>6.0*d2*((a_n**2)*b_m2 + (b_n**2)*a_m2)/(T[N]**2) \
                              + <double>4.0*d1*(a_n*b_m3 - b_n*a_m3)/T[N]
-                c = (i/t)*FN
+                c = (i//t)*FN
                 for j in range(FN): Z[c+j] = T[j]
             if y%t>0: #left over windows that are a remander of the target size
                 i = y-(y%t)
@@ -725,7 +832,7 @@ def merge_tiled_moments_target(double[::1] Y, double[::1] Z, unsigned int t, bin
                              + d4*a_n*b_n*(a_n**2 - a_n*b_n + b_n**2)/(T[N]**3) \
                              + <double>6.0*d2*((a_n**2)*b_m2 + (b_n**2)*a_m2)/(T[N]**2) \
                              + <double>4.0*d1*(a_n*b_m3 - b_n*a_m3)/T[N]
-                c = (i/t)*FN
+                c = (i//t)*FN
                 for j in range(FN): Z[c+j] = T[j]
         else:#---------------------------------------------------------------------
             for i in range(y-(t-1)):
@@ -814,7 +921,7 @@ def merge_sliding_spectrum_bin_target(float[::1] Y, float[::1] Z, float[::1] B, 
     cdef np.ndarray[float, ndim=1] T = np.zeros([<unsigned int>(len(B)-1),], dtype=np.float32)
     w = <unsigned int>0
     for i in range(len(B)-1): w += <unsigned int>Y[i] 
-    b,y,v = len(B)-1,len(Y)/(len(B)-1),<unsigned int>(t/w)
+    b,y,v = len(B)-1,len(Y)//(len(B)-1),<unsigned int>(t/w)
     if v>0 and y>0 and y>=v*w:
         for i in range(y-w*v):
             c = i*b

@@ -32,6 +32,7 @@ parser.add_argument('-t', '--threads', type=int, help='number of threads per con
 parser.add_argument('-m', '--memory', type=int, help='total GB to allocate per connection   \t[1]')
 parser.add_argument('-n', '--num_samples', type=str, help='total number of samples to download\t[1]')
 parser.add_argument('--high_cov', action='store_true', help='get the high coverage data\t[False]')
+parser.add_argument('--only_align', action='store_true', help='alignments only\t[False]')
 parser.add_argument('--nih', action='store_true', help='use nih url instead of ebi\t[False]')
 args = parser.parse_args()
 
@@ -47,11 +48,13 @@ else:
 if args.target is not None:
     target = args.target
 else:
-    raise IOError
+    if not args.only_align:
+        raise IOError
 if args.target_dir is not None:
     target_dir = args.target_dir
 else:
-    raise IOError
+    if not args.only_align:
+        raise IOError
 if args.software is not None:
     software = args.software
 else:
@@ -96,7 +99,7 @@ elif args.num_samples.upper() == 'ALL':
         sample_list = [s.replace('\n', '').split('\t') for s in f.readlines()]
     P,RG = {},{}
     for sample in sample_list:
-        if P.has_key(sample[1]):
+        if sample[1] in P:
             P[sample[1]] += [sample[0]]
         else:
             P[sample[1]] = [sample[0]]
@@ -151,7 +154,7 @@ def restart_log_status(log_path,stage):
 #verbose will tell you how many hours have elapsed in total on the job
 def get_stage_location(L):
     last_id = 0 #no stages have been completed...
-    for l in sorted(L.keys()):
+    for l in sorted(list(L.keys())):
         if len(L[l])>1:
             for j in range(len(L[l])):
                 if L[l][j][0]==1:
@@ -224,7 +227,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         for fastq in fastqs:
             idx,read = fastq.rsplit('/')[-1].rsplit('_')[0],fastq.rsplit('/')[-1].rsplit('_')[-1].rsplit('.')[0]
             if idx in fqs: fqs[idx][read] = fastq
-        rgs,F = fqs.keys(),{}
+        rgs,F = list(fqs.keys()),{}
         for rg in rgs:
             if len(fqs[rg])<2:fqs.pop(rg)
         if len(fqs)<1: err += 'error occured with files %s\nprocessed as %s'%(fastqs,fqs)
@@ -333,16 +336,45 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         else:
             write_log_status(log_status,stage,-1)
             return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
+    if last_id==5 and args.only_align:
+        stage,output,err = last_id+1,'',''
+        write_log_status(log_status,stage,0)
+        #-----------------------------------------------------------------------------
+        command = ['mv',sample_dir+'/%s.final.bam'%sample,sample_dir+'/../']
+        try:
+            output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+        except Exception:
+            err += ' '.join(command) + '\n'
+            pass
+        command = ['mv',sample_dir+'/%s.final.bam.bai'%sample,sample_dir+'/../']
+        try:
+            output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+        except Exception:
+            err += ' '.join(command) + '\n'
+            pass
+        command = ['rm','-rf',sample_dir]
+        try:
+            output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+        except Exception:
+            err += ' '.join(command) + '\n'
+            pass
+        #-----------------------------------------------------------------------------
+        if err=='' and len(glob.glob(sample_dir+'/%s.final.bam'%sample))>=1: #at least
+            write_log_status(log_status,stage,1)
+            last_id = 8
+        else:
+            write_log_status(log_status,stage,-1)
+            return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
     if last_id==5: # [6] run hfm on the final BAM file
         stage,output,err = last_id+1,'',''
         write_log_status(log_status,stage,0)
         # -----------------------------------
         if merge_rg:
             command = [software+'extractor.py','-i',sample_dir+'/%s.final.bam'%sample,'-o',sample_dir,
-                       '-s',"'%s'"%','.join(sorted(all_seqs.keys())),'-w %s'%window,'-b %s'%branch,'-p %s'%threads]
+                       '-s',"'%s'"%','.join(sorted(list(all_seqs.keys()))),'-w %s'%window,'-b %s'%branch,'-p %s'%threads]
         else:
             command = [software+'extractor.py','-i',sample_dir+'/%s.final.bam'%sample,'-o',sample_dir,'--no_merge_rg',
-                       '-s',"'%s'"%','.join(sorted(all_seqs.keys())),'-w %s'%window,'-b %s'%branch,'-p %s'%threads]
+                       '-s',"'%s'"%','.join(sorted(list(all_seqs.keys()))),'-w %s'%window,'-b %s'%branch,'-p %s'%threads]
         print(' '.join(command))
         try:
             output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
@@ -464,7 +496,7 @@ if __name__ == '__main__':
     with open(sample_list_path, 'r') as f:
         sample_list = [s.replace('\n', '').split('\t') for s in f.readlines()]
     for sample in sample_list:
-        if P.has_key(sample[1]):
+        if sample[1] in P:
             P[sample[1]] += [sample[0]]
         else:
             P[sample[1]] = [sample[0]]
@@ -475,7 +507,7 @@ if __name__ == '__main__':
     # ------------------------------------------------------------------------------------------------------------------
     if args.select_by_pop: #select evenly among pop types
         print('selecting downloads by population')
-        pops = list(np.random.choice(P.keys(), num_samples, replace=True))
+        pops = list(np.random.choice(list(P.keys()), num_samples, replace=True))
         pick_list = list(np.random.choice(list(set([y for k in P for y in P[k]])), num_samples, replace=False))
     else:                 #select the highest coverage samples using the bas RG data
         print('using highest %sth coverage bas for sample selection'%num_samples)
