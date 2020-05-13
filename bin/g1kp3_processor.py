@@ -280,12 +280,14 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         write_log_status(log_status,stage,0)
         #-----------------------------------
         sample_bams = glob.glob(sample_dir+'/%s_*.bam'%sample)
+        sorted_sample_bams = glob.glob(sample_dir+'/%s_.sorted.bam'%sample)
+        sample_bams = set(sample_bams).difference(set(sorted_sample_bams))
         for bam in sample_bams:
             command = [software+'sambamba','sort','-t %s'%threads,'-m %sGB'%memory,'--tmpdir=%s'%sample_dir,'-l','9',bam]
             try:
                 output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
-            except Exception:
-                err += ' '.join(command) + '\n'
+            except Exception as E:
+                err += 'error:%s'%str(E)+' '.join(command) + '\n'
                 pass
         if err=='' and len(glob.glob(sample_dir+'/%s_*.sorted.bam'%sample))>=len(sample_bams): #at least
             write_log_status(log_status,stage,1)
@@ -303,15 +305,15 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
             command = ['mv',sorted_sample_bams[0],sample_dir+'/%s.merged.bam'%sample] #upgrade the name
             try:
                 output += subprocess.check_output(' '.join(command), stderr=subprocess.STDOUT, shell=True)
-            except Exception:
-                err += ' '.join(command) + '\n'
+            except Exception as E:
+                err += 'error:%s'%str(E)+' '.join(command) + '\n'
                 pass
         elif len(sorted_sample_bams)>1:
             command = [software+'sambamba','merge','-t %s'%threads,'-l','9',sample_dir+'/%s.merged.bam'%sample]+sorted_sample_bams
             try:
                 output += subprocess.check_output(' '.join(command), stderr=subprocess.STDOUT, shell=True)
-            except Exception:
-                err += ' '.join(command) + '\n'
+            except Exception as E:
+                err += 'error:%s'%str(E)+' '.join(command) + '\n'
                 pass
         if err=='' and len(glob.glob(sample_dir+'/%s.merged.bam'%sample))>=1: #at least
             write_log_status(log_status,stage,1)
@@ -327,8 +329,8 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
                    sample_dir+'/%s.merged.bam'%sample,sample_dir+'/%s.final.bam'%sample]
         try:
             output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
-        except Exception:
-            err += ' '.join(command) + '\n'
+        except Exception as E:
+            err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
         if err=='' and len(glob.glob(sample_dir+'/%s.final.bam'%sample))>=1: #at least
             write_log_status(log_status,stage,1)
@@ -343,20 +345,20 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         command = ['mv',sample_dir+'/%s.final.bam'%sample,sample_dir+'/../']
         try:
             output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
-        except Exception:
-            err += ' '.join(command) + '\n'
+        except Exception as E:
+            err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
         command = ['mv',sample_dir+'/%s.final.bam.bai'%sample,sample_dir+'/../']
         try:
             output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
-        except Exception:
-            err += ' '.join(command) + '\n'
+        except Exception as E:
+            err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
         command = ['rm','-rf',sample_dir]
         try:
             output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
-        except Exception:
-            err += ' '.join(command) + '\n'
+        except Exception as E:
+            err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
         #-----------------------------------------------------------------------------
         if err=='' and len(glob.glob(sample_dir+'/%s.final.bam'%sample))>=1: #at least
@@ -378,8 +380,8 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         print(' '.join(command))
         try:
             output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
-        except Exception:
-            err += ' '.join(command) + '\n'
+        except Exception as E:
+            err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
         if err=='' and len(glob.glob(sample_dir+'/%s.final.merged.hdf5'%sample))>=1: #at least
             write_log_status(log_status,stage,1)
@@ -397,8 +399,8 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         print(' '.join(command))
         try:
             output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
-        except Exception:
-            err += ' '.join(command) + '\n'
+        except Exception as E:
+            err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
         if err=='': #at least
             write_log_status(log_status,stage,1)
@@ -413,8 +415,8 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         command = ['rm','-rf',sample_dir] #test it first
         try:
             output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
-        except Exception:
-            err += '\t'.join(command) + '\n'
+        except Exception as E:
+            err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
         if err=='': #at least
             write_log_status(log_status,stage,1)
