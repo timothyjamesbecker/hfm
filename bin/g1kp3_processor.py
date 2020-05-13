@@ -280,12 +280,12 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         write_log_status(log_status,stage,0)
         #-----------------------------------
         sample_bams = glob.glob(sample_dir+'/%s_*.bam'%sample)
-        sorted_sample_bams = glob.glob(sample_dir+'/%s_.sorted.bam'%sample)
+        sorted_sample_bams = glob.glob(sample_dir+'/%s*.sorted.bam'%sample)
         sample_bams = set(sample_bams).difference(set(sorted_sample_bams))
         for bam in sample_bams:
             command = [software+'sambamba','sort','-t %s'%threads,'-m %sGB'%memory,'--tmpdir=%s'%sample_dir,'-l','9',bam]
             try:
-                output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+                output += subprocess.check_output(' '.join(command),shell=True)
             except Exception as E:
                 err += 'error:%s'%str(E)+' '.join(command) + '\n'
                 pass
@@ -304,14 +304,14 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         if len(sorted_sample_bams)>0 and len(sorted_sample_bams)<=1:
             command = ['mv',sorted_sample_bams[0],sample_dir+'/%s.merged.bam'%sample] #upgrade the name
             try:
-                output += subprocess.check_output(' '.join(command), stderr=subprocess.STDOUT, shell=True)
+                output += subprocess.check_output(' '.join(command),shell=True)
             except Exception as E:
                 err += 'error:%s'%str(E)+' '.join(command) + '\n'
                 pass
         elif len(sorted_sample_bams)>1:
             command = [software+'sambamba','merge','-t %s'%threads,'-l','9',sample_dir+'/%s.merged.bam'%sample]+sorted_sample_bams
             try:
-                output += subprocess.check_output(' '.join(command), stderr=subprocess.STDOUT, shell=True)
+                output += subprocess.check_output(' '.join(command),shell=True)
             except Exception as E:
                 err += 'error:%s'%str(E)+' '.join(command) + '\n'
                 pass
@@ -328,7 +328,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         command = [software+'sambamba','markdup','-t %s'%threads,'--tmpdir=%s'%sample_dir,'-l','9',
                    sample_dir+'/%s.merged.bam'%sample,sample_dir+'/%s.final.bam'%sample]
         try:
-            output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            output += subprocess.check_output(' '.join(command),shell=True)
         except Exception as E:
             err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
