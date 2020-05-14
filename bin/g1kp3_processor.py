@@ -31,7 +31,7 @@ parser.add_argument('-c', '--connections', type=int, help='number of connections
 parser.add_argument('-t', '--threads', type=int, help='number of threads per connection\t[1]')
 parser.add_argument('-m', '--memory', type=int, help='total GB to allocate per connection   \t[1]')
 parser.add_argument('-n', '--num_samples', type=str, help='total number of samples to download\t[1]')
-parser.add_argument('--high_cov', action='store_true', help='get the high coverage data\t[False]')
+parser.add_argument('--samples', type=str, help='get specific samples\t[None]')
 parser.add_argument('--only_align', action='store_true', help='alignments only\t[False]')
 parser.add_argument('--nih', action='store_true', help='use nih url instead of ebi\t[False]')
 args = parser.parse_args()
@@ -91,6 +91,8 @@ if args.no_merge_rg:
     merge_rg = False
 else:
     merge_rg = True
+if args.samples is not None: get_samples = args.samples.rsplit(',')
+else:                        get_samples = None
 if args.num_samples is not None and args.num_samples.upper() != 'ALL':
     num_samples = int(args.num_samples)
 elif args.num_samples.upper() == 'ALL':
@@ -99,12 +101,13 @@ elif args.num_samples.upper() == 'ALL':
         sample_list = [s.replace('\n', '').split('\t') for s in f.readlines()]
     P,RG = {},{}
     for sample in sample_list:
-        if sample[1] in P:
-            P[sample[1]] += [sample[0]]
-        else:
-            P[sample[1]] = [sample[0]]
-        RG[sample[0]] = ['@RG\tID:%s\tSM:%s\tPL:%s\tLB:%s\tPU:%s'%\
-                         (rg.split(';')[0],sample[0],rg.split(';')[2],rg.split(';')[1],rg.split(';')[0]) for rg in sample[2].split(',')]
+        if get_samples is None or sample[0] in get_samples:
+            if sample[1] in P:
+                P[sample[1]] += [sample[0]]
+            else:
+                P[sample[1]] = [sample[0]]
+            RG[sample[0]] = ['@RG\tID:%s\tSM:%s\tPL:%s\tLB:%s\tPU:%s'%\
+                             (rg.split(';')[0],sample[0],rg.split(';')[2],rg.split(';')[1],rg.split(';')[0]) for rg in sample[2].split(',')]
     num_samples = sum([len(P[k]) for k in P])
 else:
     sample_list = []
