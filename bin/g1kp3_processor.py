@@ -388,7 +388,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         else:
             write_log_status(log_status,stage,-1)
             return 'error on sample %s stage %s: %s :%s'%(sample,stage,err,output)
-    if last_id==5: # [6] run hfm on the final BAM file
+    elif last_id==5: # [6] run hfm on the final BAM file
         stage,output,err = last_id+1,'',''
         write_log_status(log_status,stage,0)
         # -----------------------------------
