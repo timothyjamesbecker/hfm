@@ -245,7 +245,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
             print('found minimap2 alignment of read group = %s'%(len(check_bam)>0))
             if rg!='' and len(check_bam)<1:
                 print("starting new minimap2 alignment for read group = '%s'"%rg.replace('\t','\\t'))
-                command = [software+'minimap2','-ax','sr','-Y','-t %s'%threads,'-R',"'%s'"%rg.replace('\t','\\t'),ref_mmi,fqs[idx]['1'],fqs[idx]['2'],'|',
+                command = [software+'minimap2','-ax','sr','-Y','--eqx','-t %s'%threads,'-R',"'%s'"%rg.replace('\t','\\t'),ref_mmi,fqs[idx]['1'],fqs[idx]['2'],'|',
                            software+'samtools','view','-','-Sbh','>','%s/%s_%s.bam'%(sample_dir,sample,idx)]
                 try:
                     new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
@@ -510,6 +510,7 @@ if __name__ == '__main__':
                 SKS[s] = all_seqs[s]
         if valid: all_seqs = SKS
     print('using sequences=%s'%sorted(all_seqs))
+    output = ''
     if not os.path.exists(ref_mmi):
         print('minimap2 index file being generated...')
         command = [software+'minimap2','-d',ref_mmi,ref]
