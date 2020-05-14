@@ -382,7 +382,7 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
             err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
         #-----------------------------------------------------------------------------
-        if err=='' and len(glob.glob(sample_dir+'../%s.final.bam'%sample))>=1: #at least
+        if err=='' and len(glob.glob(sample_dir+'/../%s.final.bam'%sample))>=1: #at least
             write_log_status(log_status,stage,1)
             last_id = 8
         else:
