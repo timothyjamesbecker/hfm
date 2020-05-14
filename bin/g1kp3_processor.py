@@ -204,7 +204,9 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
                 print(url)
                 command = ['cd',sample_dir,'&&','wget','-c',url] #can restart downloads with -c and a failure
                 try:
-                    output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+                    new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+                    if type(new_output) is bytes: output += new_output.decode('utf-8')
+                    else:                         output += new_output
                 except Exception as E:
                     err += str(E)+'\n'
                     print('possible connection loss for %s'%url)
@@ -246,7 +248,9 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
                 command = [software+'minimap2','-ax','sr','-Y','-t %s'%threads,'-R',"'%s'"%rg.replace('\t','\\t'),ref_mmi,fqs[idx]['1'],fqs[idx]['2'],'|',
                            software+'samtools','view','-','-Sbh','>','%s/%s_%s.bam'%(sample_dir,sample,idx)]
                 try:
-                    output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+                    new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+                    if type(new_output) is bytes: output += new_output.decode('utf-8')
+                    else:                         output += new_output
                     print("finished minimap2 alignemnt of read group = '%s'"%rg)
                 except Exception as E:
                     print("minimap2 alignemnt failed for read group = '%s'"%rg)
@@ -285,7 +289,9 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         for bam in sample_bams:
             command = [software+'sambamba','sort','-t %s'%threads,'-m %sGB'%memory,'--tmpdir=%s'%sample_dir,'-l','9',bam]
             try:
-                output += subprocess.check_output(' '.join(command),shell=True)
+                new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+                if type(new_output) is bytes: output += new_output.decode('utf-8')
+                else:                         output += new_output
             except Exception as E:
                 err += 'error:%s'%str(E)+' '.join(command) + '\n'
                 pass
@@ -304,14 +310,16 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         if len(sorted_sample_bams)>0 and len(sorted_sample_bams)<=1:
             command = ['mv',sorted_sample_bams[0],sample_dir+'/%s.merged.bam'%sample] #upgrade the name
             try:
-                output += subprocess.check_output(' '.join(command),shell=True)
+                output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
             except Exception as E:
                 err += 'error:%s'%str(E)+' '.join(command) + '\n'
                 pass
         elif len(sorted_sample_bams)>1:
             command = [software+'sambamba','merge','-t %s'%threads,'-l','9',sample_dir+'/%s.merged.bam'%sample]+sorted_sample_bams
             try:
-                output += subprocess.check_output(' '.join(command),shell=True)
+                new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+                if type(new_output) is bytes: output += new_output.decode('utf-8')
+                else:                         output += new_output
             except Exception as E:
                 err += 'error:%s'%str(E)+' '.join(command) + '\n'
                 pass
@@ -328,7 +336,9 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         command = [software+'sambamba','markdup','-t %s'%threads,'--tmpdir=%s'%sample_dir,'-l','9',
                    sample_dir+'/%s.merged.bam'%sample,sample_dir+'/%s.final.bam'%sample]
         try:
-            output += subprocess.check_output(' '.join(command),shell=True)
+            new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            if type(new_output) is bytes: output += new_output.decode('utf-8')
+            else:                         output += new_output
         except Exception as E:
             err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
