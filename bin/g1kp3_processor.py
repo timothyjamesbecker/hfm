@@ -310,7 +310,9 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         if len(sorted_sample_bams)>0 and len(sorted_sample_bams)<=1:
             command = ['mv',sorted_sample_bams[0],sample_dir+'/%s.merged.bam'%sample] #upgrade the name
             try:
-                output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+                new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+                if type(new_output) is bytes: output += new_output.decode('utf-8')
+                else:                         output += new_output
             except Exception as E:
                 err += 'error:%s'%str(E)+' '.join(command) + '\n'
                 pass
@@ -354,19 +356,25 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         #-----------------------------------------------------------------------------
         command = ['mv',sample_dir+'/%s.final.bam'%sample,sample_dir+'/../']
         try:
-            output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            if type(new_output) is bytes: output += new_output.decode('utf-8')
+            else:                         output += new_output
         except Exception as E:
             err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
         command = ['mv',sample_dir+'/%s.final.bam.bai'%sample,sample_dir+'/../']
         try:
-            output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            if type(new_output) is bytes: output += new_output.decode('utf-8')
+            else:                         output += new_output
         except Exception as E:
             err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
         command = ['rm','-rf',sample_dir]
         try:
-            output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            if type(new_output) is bytes: output += new_output.decode('utf-8')
+            else:                         output += new_output
         except Exception as E:
             err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
@@ -389,7 +397,9 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
                        '-s',"'%s'"%','.join(sorted(list(all_seqs.keys()))),'-w %s'%window,'-b %s'%branch,'-p %s'%threads]
         print(' '.join(command))
         try:
-            output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            if type(new_output) is bytes: output += new_output.decode('utf-8')
+            else:                         output += new_output
         except Exception as E:
             err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
@@ -408,7 +418,9 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         command = ['rsync','-aP',hdf5_file,dest]
         print(' '.join(command))
         try:
-            output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            if type(new_output) is bytes: output += new_output.decode('utf-8')
+            else:                         output += new_output
         except Exception as E:
             err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
@@ -424,7 +436,9 @@ def wget_fastq_align(base_url,log_path,ref_mmi,sample,merge_rg,retries):
         # -----------------------------------
         command = ['rm','-rf',sample_dir] #test it first
         try:
-            output += subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            new_output = subprocess.check_output(' '.join(command),stderr=subprocess.STDOUT,shell=True)
+            if type(new_output) is bytes: output += new_output.decode('utf-8')
+            else:                         output += new_output
         except Exception as E:
             err += 'error:%s'%str(E)+' '.join(command) + '\n'
             pass
@@ -448,7 +462,9 @@ def wget_bas(base_url,log_path,sample):
     print(url)
     command = ['cd', '/'.join(log_path.rsplit('/')[0:-1]) + '/', '&&', 'wget', '-c', url]
     try:
-        output += subprocess.check_output(' '.join(command), stderr=subprocess.STDOUT, shell=True)
+        new_output = subprocess.check_output(' '.join(command), stderr=subprocess.STDOUT, shell=True)
+        if type(new_output) is bytes: output += new_output.decode('utf-8')
+        else:                         output += new_output
     except Exception:
         err += '\t'.join(command) + '\n'
         pass
@@ -498,7 +514,9 @@ if __name__ == '__main__':
         print('minimap2 index file being generated...')
         command = [software+'minimap2','-d',ref_mmi,ref]
         try:
-            output = subprocess.check_output(' '.join(command), stderr=subprocess.STDOUT, shell=True)
+            new_output = subprocess.check_output(' '.join(command), stderr=subprocess.STDOUT, shell=True)
+            if type(new_output) is bytes: output += new_output.decode('utf-8')
+            else:                         output += new_output
         except Exception:
             err    = '\t'.join(command) + '\n'
             pass
