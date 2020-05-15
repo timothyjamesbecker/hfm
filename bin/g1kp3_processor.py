@@ -530,14 +530,15 @@ if __name__ == '__main__':
     with open(sample_list_path, 'r') as f:
         sample_list = [s.replace('\n', '').split('\t') for s in f.readlines()]
     for sample in sample_list:
-        if sample[1] in P:
-            P[sample[1]] += [sample[0]]
-        else:
-            P[sample[1]] = [sample[0]]
-        RG[sample[0]] = ['@RG\tID:%s\tSM:%s\tPL:%s\tLB:%s\tPU:%s'%\
-                         (rg.split(';')[0],sample[0],rg.split(';')[2],rg.split(';')[1],rg.split(';')[0]) \
-                         for rg in sample[2].split(',')]
-        C[sample[0]] = sum([float(rg.split(';')[3]) for rg in sample[2].split(',')])
+        if get_samples is None or sample[0] in get_samples:
+            if sample[1] in P:
+                P[sample[1]] += [sample[0]]
+            else:
+                P[sample[1]] = [sample[0]]
+            RG[sample[0]] = ['@RG\tID:%s\tSM:%s\tPL:%s\tLB:%s\tPU:%s'%\
+                             (rg.split(';')[0],sample[0],rg.split(';')[2],rg.split(';')[1],rg.split(';')[0]) \
+                             for rg in sample[2].split(',')]
+            C[sample[0]] = sum([float(rg.split(';')[3]) for rg in sample[2].split(',')])
     # ------------------------------------------------------------------------------------------------------------------
     if args.select_by_pop: #select evenly among pop types
         print('selecting downloads by population')
