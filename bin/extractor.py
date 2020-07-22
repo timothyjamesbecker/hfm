@@ -103,7 +103,7 @@ else:                         seqs  = 'all'
 if args.tracks is not None:   trks  = args.tracks.split(',')
 else:                         trks  = ['total','primary','mapq','MD','discordant','fwd_rev_diff',
                                        'right_clipped','left_clipped','deletion','big_del','insertion','substitution',
-                                       'tlen','tlen_rd','orient_same','orient_out','orient_um','orient_chr',
+                                       'tlen_pp','tlen_rd','orient_same','orient_out','orient_um','orient_chr',
                                        'smap_same','smap_diff','left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
 if args.dna:                  trks += ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
 if args.features is not None: feats = args.features.split(',')

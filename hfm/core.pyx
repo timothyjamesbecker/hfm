@@ -135,12 +135,12 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             C['total'][rg][a:b]            += 1.0
             C['mapq'][rg][a:b]             += mapq
             C['tlen'][rg][a:b]             += tlen
-            if tlen>0.0:   C['tlen_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
-            elif tlen<0.0: C['tlen_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
             if read.is_proper_pair:
                 C['proper_pair'][rg][a:b]  += 1.0
                 C['mapq_pp'][rg][a:b]      += mapq
                 C['tlen_pp'][rg][a:b]      += tlen
+                if tlen>0.0:   C['tlen_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
+                elif tlen<0.0: C['tlen_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
             elif tid==mid and not read.mate_is_unmapped:
                 C['discordant'][rg][a:b]   += 1.0
                 C['mapq_dis'][rg][a:b]     += mapq
