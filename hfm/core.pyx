@@ -90,7 +90,7 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
     tracks = ['alternate','orient_same','orient_out','orient_um','orient_chr','right_anchor','left_anchor','splice',
               'right_clipped','left_clipped','clipped','big_del','deletion','insertion','substitution','fwd_rev_diff']
     values = ['total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis',
-              'tlen','tlen_pp','tlen_dis','tlen_rd','orient_same_rd','orient_out_rd','RD','GC','MD',
+              'tlen','tlen_pp','tlen_dis','tlen_pp_rd','tlen_dis_rd','orient_same_rd','orient_out_rd','RD','GC','MD',
               'smap_same','smap_diff','left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
     dna_trans = ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
     if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))} #duplicated from the safe lib
@@ -139,12 +139,14 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
                 C['proper_pair'][rg][a:b]  += 1.0
                 C['mapq_pp'][rg][a:b]      += mapq
                 C['tlen_pp'][rg][a:b]      += tlen
-                if tlen>0.0:   C['tlen_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
-                elif tlen<0.0: C['tlen_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
+                if tlen>0.0:   C['tlen_pp_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
+                elif tlen<0.0: C['tlen_pp_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
             elif tid==mid and not read.mate_is_unmapped:
                 C['discordant'][rg][a:b]   += 1.0
                 C['mapq_dis'][rg][a:b]     += mapq
-                C['tlen_dis'][rg][a:b]     += 1.0
+                C['tlen_dis'][rg][a:b]     += tlen
+                if tlen>0.0:   C['tlen_dis_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
+                elif tlen<0.0: C['tlen_dis_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
             if not read.is_supplementary and not read.is_secondary:  C['primary'][rg][a:b]      += 1.0
             else:                                                    C['alternate'][rg][a:b]    += 1.0
             if not read.is_reverse:                                  C['fwd_rev_diff'][rg][a:b] += 1.0
@@ -284,11 +286,12 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
             C['mapq_pp'][rg]         = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
             C['mapq_dis'][rg]        = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
             C['tlen'][rg]            = C['tlen'][rg]/C['total'][rg]-1.0
-            C['tlen_rd'][rg]         = C['tlen_rd'][rg]/C['total'][rg]-1.0
             C['orient_same_rd'][rg]  = C['orient_same_rd'][rg]/C['total'][rg]-1.0
             C['orient_out_rd'][rg]   = C['orient_out_rd'][rg]/C['total'][rg]-1.0
             C['tlen_pp'][rg]         = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
+            C['tlen_pp_rd'][rg]      = C['tlen_pp_rd'][rg]/C['proper_pair'][rg]-1.0
             C['tlen_dis'][rg]        = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
+            C['tlen_dis_rd'][rg]     = C['tlen_dis_rd'][rg]/C['discordant'][rg]-1.0
             C['discordant'][rg]      = C['discordant'][rg]-1.0
             C['proper_pair'][rg]     = C['proper_pair'][rg]-1.0
             C['primary'][rg]         = C['primary'][rg]-1.0
@@ -307,11 +310,12 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
         C['mapq_pp'][rg]         = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
         C['mapq_dis'][rg]        = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
         C['tlen'][rg]            = C['tlen'][rg]/C['total'][rg]-1.0
-        C['tlen_rd'][rg]         = C['tlen_rd'][rg]/C['total'][rg]-1.0
         C['orient_same_rd'][rg]  = C['orient_same_rd'][rg]/C['total'][rg]-1.0
         C['orient_out_rd'][rg]   = C['orient_out_rd'][rg]/C['total'][rg]-1.0
         C['tlen_pp'][rg]         = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
+        C['tlen_pp_rd'][rg]      = C['tlen_pp_rd'][rg]/C['proper_pair'][rg]-1.0
         C['tlen_dis'][rg]        = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
+        C['tlen_dis_rd'][rg]     = C['tlen_dis_rd'][rg]/C['discordant'][rg]-1.0
         C['discordant'][rg]      = C['discordant'][rg]-1.0
         C['proper_pair'][rg]     = C['proper_pair'][rg]-1.0
         C['primary'][rg]         = C['primary'][rg]-1.0

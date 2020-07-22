@@ -101,10 +101,11 @@ else:                         end_clean = True
 if args.seqs is not None:     seqs  = args.seqs.split(',')
 else:                         seqs  = 'all'
 if args.tracks is not None:   trks  = args.tracks.split(',')
-else:                         trks  = ['total','primary','mapq','MD','discordant','fwd_rev_diff',
-                                       'right_clipped','left_clipped','deletion','big_del','insertion','substitution',
-                                       'tlen_pp','tlen_rd','orient_same','orient_out','orient_um','orient_chr',
-                                       'smap_same','smap_diff','left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
+else:                         trks  = ['total','primary','alternate','proper_pair','discordant','RD','GC','MD',
+                                       'mapq_pp','mapq_dis','big_del','deletion','insertion','substitution','splice','fwd_rev_diff',
+                                       'tlen_pp', 'tlen_pp_rd', 'tlen_dis', 'tlen_dis_rd','right_clipped','left_clipped',
+                                       'orient_same','orient_out','orient_um','orient_chr',
+                                       'left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
 if args.dna:                  trks += ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
 if args.features is not None: feats = args.features.split(',')
 else:                         feats = ['moments']
