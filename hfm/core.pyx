@@ -96,7 +96,7 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
     dna_trans = ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
     if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))} #duplicated from the safe lib
     if mem_map_path is None:
-        print('building in mem arrays')
+        print('building in mem arrays for seq=%s'%seq)
         for rg in sms:
             for t in tracks:
                 if t in C: C[t][rg] = np.zeros([end-start,], dtype=np.float32)
@@ -109,6 +109,7 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
                     if k in C: C[k][rg] = np.zeros([end-start], dtype=np.float32)
                     else:      C[k] = {rg:np.zeros([end-start], dtype=np.float32)}
             S[rg] = {'L':[],'R':[]}
+        print('finished building in mem arrays for seq=%s'%seq)
     else:
         print('building mem map arrays for seq=%s'%seq)
         for rg in sms:
