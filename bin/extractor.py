@@ -136,7 +136,16 @@ if args.filter is not None: # trk:flt_name,value,width,over,mix; ... [EX] total:
         print('filter parameter syntax error:%s'%args.filter)
         fltr_params = None #error parsing inputs
     else: print(fltr_params)
-else:                         fltr_params = None
+else:
+    flt_trks = {'tlen_dis_rd':    {'type':'poly','value':0.3,'width':int(1E9),'over':0,'mix':1.0},
+                'left_smap_same': {'type':'poly','value':0.3,'width':int(1E9),'over':0,'mix':1.0},
+                'left_smap_diff': {'type':'poly','value':0.3,'width':int(1E9),'over':0,'mix':1.0},
+                'right_smap_same':{'type':'poly','value':0.3,'width':int(1E9),'over':0,'mix':1.0},
+                'right_smap_diff':{'type':'poly','value':0.3,'width':int(1E9),'over':0,'mix':1.0}}
+    fltr_params = None
+    for flt in flt_trks:
+        if flt in trks:
+            fltr_params[flt] = flt_trks[flt]
 if args.comp is not None: comp      = args.comp
 else:                     comp      = 'gzip'
 
