@@ -373,7 +373,7 @@ class HFM:
             if f_ws[len(f_ws)-1][1]<ds: f_ws += [[f_ws[len(f_ws)-1][1]-over,ds]]
             for f_w in f_ws:
                 if type=='poly':
-                    print('starting poly fiter...')
+                    # print('starting poly fiter...')
                     start,end = f_w[0],f_w[1]-1
                     while start<f_w[1]-1 and data[start]<=0.0: start += 1
                     while end>f_w[0]+1  and data[end]<=0.0:    end   -= 1
@@ -390,7 +390,7 @@ class HFM:
                     t_min  = np.min(tran_y)
                     t_rng  = np.max(tran_y)-t_min
                     data[start:end] = mix*(((tran_y-t_min)/t_rng)*y_rng+y_min)+(1.0*mix)*data[start:end]
-                    print('finished poly filter...')
+                    # print('finished poly filter...')
                 elif type in pywt.wavelist():
                     if sum(data[f_w[0]:f_w[1]])>0.0:
                         data[:] += 1.0
