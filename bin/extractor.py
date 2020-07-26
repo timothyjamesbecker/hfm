@@ -142,10 +142,11 @@ else:
                 'left_smap_diff': {'type':'poly','value':0.5,'width':int(1E9),'over':0,'mix':1.0},
                 'right_smap_same':{'type':'poly','value':0.5,'width':int(1E9),'over':0,'mix':1.0},
                 'right_smap_diff':{'type':'poly','value':0.5,'width':int(1E9),'over':0,'mix':1.0}}
-    fltr_params = None
+    fltr_params = {}
     for flt in flt_trks:
         if flt in trks:
             fltr_params[flt] = flt_trks[flt]
+    if len(fltr_params)<1: fltr_params = None
 if args.comp is not None: comp      = args.comp
 else:                     comp      = 'gzip'
 
