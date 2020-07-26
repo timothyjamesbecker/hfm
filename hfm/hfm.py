@@ -13,10 +13,7 @@ from h5py import File
 import math
 import glob
 import numpy as np
-import pywt
-from scipy import ndimage as ndi
-from skimage import restoration as res
-from sklearn import cluster as cst
+import matplotlib.pyplot as plt
 import multiprocessing as mp
 import pysam
 import core
@@ -362,10 +359,10 @@ class HFM:
     def tile_to_index(self,tile):
         return 0
 
-    #filter raw features veofre summarizing them------------------------------
-    def filter(self,data,type='tv',value=0.1,width=int(1E4),over=0,mix=0.5):
+    #filter raw features before summarizing them------------------------------
+    def filter(self,data,type='db4',value=0.1,width=int(1E4),over=0,mix=0.5):
+        import pywt #filtering requires pywt...
         if np.sum(data)>0.0:
-            data[:] += 1.0
             ds = data.shape[0]
             width = min(width,ds)     #can't make it smaller than the given window...
             over  = min(over,width-1) #can't have overlap larger than width
@@ -375,43 +372,42 @@ class HFM:
                 x += width-over
             if f_ws[len(f_ws)-1][1]<ds: f_ws += [[f_ws[len(f_ws)-1][1]-over,ds]]
             for f_w in f_ws:
-                if type=='tv':
-                    data[f_w[0]:f_w[1]] = mix*res.denoise_tv_chambolle(data[f_w[0]:f_w[1]],
-                                                                       weight=np.mean(data[f_w[0]:f_w[1]])*value,
-                                                                       n_iter_max=100,
-                                                                       eps=0.001)+(1.0*mix)*data[f_w[0]:f_w[1]]
-                elif type=='median':
-                    x = int(50*round(self.__window__*value))
-                    data[f_w[0]:f_w[1]] = mix*ndi.median_filter(data[f_w[0]:f_w[1]],size=(x+1 if x%2==0 else x))+(1.0*mix)*data[f_w[0]:f_w[1]]
-                elif type=='km_clust':
-                    if value>1.0: value = 1.0
-                    if value<0.0: value = 0.0
-                    l_data = np.copy(data[f_w[0]:f_w[1]])
-                    l_data = l_data.reshape(l_data.shape[0],1)
-                    km     = cst.KMeans(n_clusters=max(2,int(2*value)),max_iter=100,n_jobs=1)
-                    clust  = km.fit(l_data).labels_
-                    cc = [[0,0,clust[0]]]
-                    for i in range(1,len(clust),1):
-                        if clust[i]==cc[-1][2]: cc[-1][1]=i
-                        else:                   cc += [[i,i,clust[i]]]
-                    for c in cc:
-                        l_data[c[0]:c[1]+1,0] = mix*np.mean(data[f_w[0]+c[0]:f_w[0]+c[1]+1])+(1.0*mix)*data[f_w[0]+c[0]:f_w[0]+c[1]+1]
-                    data[f_w[0]:f_w[1]] = l_data.reshape((l_data.shape[0],))
+                if type=='poly':
+                    print('starting poly fiter...')
+                    start,end = f_w[0],f_w[1]-1
+                    while start<f_w[1]-1 and data[start]<=0.0: start += 1
+                    while end>f_w[0]+1  and data[end]<=0.0:    end   -= 1
+                    y = data[start:end]
+                    y_min = np.min(y)
+                    y_rng = np.max(y)-y_min
+                    mean,std = np.mean(y),np.std(y)
+                    x      = np.arange(0,len(y))
+                    poly   = np.poly1d(np.polyfit(x,y-std*value,deg=4))
+                    fit    = np.clip(poly(x),0.0,mean+(5*std*(1.0-value)))
+                    f_min  = np.min(fit)
+                    f_rng  = np.max(fit)-f_min
+                    tran_y = np.clip(y-fit,0.0,f_rng)
+                    t_min  = np.min(tran_y)
+                    t_rng  = np.max(tran_y)-t_min
+                    data[start:end] = mix*(((tran_y-t_min)/t_rng)*y_rng+y_min)+(1.0*mix)*data[start:end]
+                    print('finished poly filter...')
                 elif type in pywt.wavelist():
                     if sum(data[f_w[0]:f_w[1]])>0.0:
+                        data[:] += 1.0
                         wlt,wlt_thr = pywt.Wavelet(type),np.mean(data[f_w[0]:f_w[1]])*(1.0-value)
                         maxlev = pywt.dwt_max_level(f_w[1]-f_w[0],wlt.dec_len)
                         wlt_cffs = pywt.wavedec(data[f_w[0]:f_w[1]],type, level=maxlev)
                         for i in range(1,len(wlt_cffs)): wlt_cffs[i] = pywt.threshold(wlt_cffs[i],wlt_thr*max(wlt_cffs[i]))
                         data[f_w[0]:f_w[1]] = mix*pywt.waverec(wlt_cffs,type)[:f_w[1]-f_w[0]]+(1.0*mix)*data[f_w[0]:f_w[1]]
-            data[:] -= 1.0
+                        data[:] -= 1.0
 
     #default track is reads_all or total coverage from an alignment file
     #into the shared memory buffers, perform feature generation
     #and then write write to hdf5 container with extraction metadata
     def extract_chunk(self,alignment_path,hdf5_path,sms,seq,start,end,
                       merge_rg=True,exact_sub=False,tracks=['total'],features=['moments'],filter_params=None,
-                      ref_seq=None,min_smapq=20,differential_alignment_path=None,differential_op='subtract',verbose=False):
+                      ref_seq=None,min_smapq=20,differential_alignment_path=None,differential_op='subtract',
+                      mem_map_path=None,verbose=False):
         #PRE------------------------------------------------------------------------------------------------------PRE 
         self.__seq__ = list(seq.keys())[0]
         self.__len__ = seq[list(seq.keys())[0]]
@@ -424,26 +420,30 @@ class HFM:
         if any([t in tracks for t in dna_trans]):
             self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,
                                                 merge_rg=merge_rg,dna=True,exact_sub=exact_sub,
-                                                ref_seq=ref_seq,min_smapq=min_smapq)
+                                                ref_seq=ref_seq,min_smapq=min_smapq,mem_map_path=mem_map_path)
             if filter_params is not None:
-                if verbose: print('filter=%s for start=%s end=%s'%(filter_params,start,end))
                 for track in self.A:
-                    for rg in self.A[track]:
-                        self.filter(self.A[track][rg],type=filter_params['type'],value=filter_params['value'],
-                                    width=filter_params['width'],over=filter_params['over'],mix=filter_params['mix'])
+                    if track in filter_params:
+                        if verbose: print('track=%s filter=%s for start=%s end=%s'%(track,filter_params[track],start,end))
+                        for rg in self.A[track]:
+                            self.filter(self.A[track][rg],type=filter_params[track]['type'],value=filter_params[track]['value'],
+                                        width=filter_params[track]['width'],over=filter_params[track]['over'],mix=filter_params[track]['mix'])
         else:
+            print('loading all the tracks for seq=%s'%seq)
             self.A = core.load_reads_all_tracks(self.ap,sms,self.__seq__,start,end,
                                                 merge_rg=merge_rg,dna=False,exact_sub=exact_sub,
-                                                ref_seq=ref_seq,min_smapq=min_smapq)
+                                                ref_seq=ref_seq,min_smapq=min_smapq,mem_map_path=mem_map_path)
+            print('tracks were loaded for seq=%s'%seq)
             if filter_params is not None:
-                if verbose: print('filter=%s start=%s end=%s'%(filter_params,start,end))
                 for track in self.A:
-                    for rg in self.A[track]:
-                        self.filter(self.A[track][rg],type=filter_params['type'],value=filter_params['value'],
-                                    width=filter_params['width'],over=filter_params['over'],mix=filter_params['mix'])
+                    if track in filter_params:
+                        if verbose: print('track=%s filter=%s for start=%s end=%s'%(track,filter_params[track],start,end))
+                        for rg in self.A[track]:
+                            self.filter(self.A[track][rg],type=filter_params[track]['type'],value=filter_params[track]['value'],
+                                        width=filter_params[track]['width'],over=filter_params[track]['over'],mix=filter_params[track]['mix'])
         if differential_alignment_path is not None: #should only be used on the rg='all' and will need to add dna=>trans
             diff_sms = get_sam_sm(differential_alignment_path)
-            self.D = core.load_reads_all_tracks(differential_alignment_path,sms,self.__seq__,start,end,merge_rg)
+            self.D = core.load_reads_all_tracks(differential_alignment_path,sms,self.__seq__,start,end,merge_rg,mem_map_path=mem_map_path)
             if differential_op=='subtract':
                 for track in self.A:
                     if track in self.D:
@@ -682,6 +682,20 @@ class HFM:
         #FULL----------------------------------------------------------------------------------------------------FULL
         #POST----------------------------------------------------------------------------------------------------POST
         self.f.close()
+        print('closing the memmaps on seq=%s'%seq)
+        if mem_map_path is not None:
+            ts = sorted(self.A.keys())
+            for t in ts:
+                rgs = sorted(self.A[t])
+                for rg in rgs: del self.A[t][rg] #close up the maps
+            print('closed the following memmap files:%s'%','.join(glob.glob(mem_map_path+'/*.dat')))
+            try:
+                for file in glob.glob(mem_map_path+'/*.dat'): os.remove(file)
+                print('cleaned all memmap files for seq=%s'%seq)
+            except Exception as E:
+                print('issues with cleaning memmap files for seq=%s'%seq)
+                print(E)
+                pass
         self.A = None
         self.I = None
         self.O = None
@@ -691,7 +705,8 @@ class HFM:
     #|| on each seq into mp pool
     def extract_seq(self,alignment_path,base_name,sms,seq,
                     merge_rg=True,exact_sub=False,tracks=['total'],features=['moments'],filter_params=None,
-                    ref_path=None,min_smapq=20,differential_alignment_path=None,differential_op='subtract',verbose=False):
+                    ref_path=None,min_smapq=20,differential_alignment_path=None,differential_op='subtract',
+                    mem_map_path=None,verbose=False):
         k = list(seq.keys())[0]
         passes = int(k//int(self.__chunk__))
         last   = int(k%int(self.__chunk__))
@@ -708,7 +723,7 @@ class HFM:
             self.extract_chunk(alignment_path,base_name+'.seq.'+seq[k]+'.hdf5',sms,{seq[k]:k},x,x+chunks[i]+self.__window__, 
                                merge_rg=merge_rg,exact_sub=exact_sub,tracks=tracks,features=features,filter_params=filter_params,
                                ref_seq=ref_seq,min_smapq=min_smapq,differential_alignment_path=differential_alignment_path,
-                               differential_op=differential_op,verbose=verbose)
+                               differential_op=differential_op,mem_map_path=mem_map_path,verbose=verbose)
             x += chunks[i]
         return True
 

@@ -78,7 +78,8 @@ def edit_dist_str(str s1, str s2, list w=[1,1,1]):
 def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int end,
                           bint merge_rg=True, bint dna=False, bint exact_sub=False,
                           str ref_seq = None, str align_preset = 'sr',
-                          int min_anchor=36, int min_clip=18, int min_smapq=20, int big_del=36):
+                          int min_anchor=36, int min_clip=18, int min_smapq=20, int big_del=36,
+                          mem_map_path=None):
     cdef int            i,j,a,b,c,d,e,f,s1,s2,tid,mid,mapq,alen,rlen,aend,rend,tlen,last,offset
     cdef float          x,y,z
     cdef str            k,t,v,rg,tag,track,sequence
@@ -94,18 +95,44 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
               'smap_same','smap_diff','left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
     dna_trans = ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
     if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))} #duplicated from the safe lib
-    for rg in sms:
-        for t in tracks:
-            if t in C: C[t][rg] = np.zeros([end-start,], dtype=np.float32)
-            else:      C[t] = {rg:np.zeros([end-start,], dtype=np.float32)}
-        for v in values: #don't have to deal with 0-div
-            if v in C: C[v][rg] = np.zeros([end-start,], dtype=np.float32)+1.0
-            else:      C[v] = {rg:np.zeros([end-start,], dtype=np.float32)+1.0}
-        if dna:
-            for k in dna_trans:
-                if k in C: C[k][rg] = np.zeros([end-start], dtype=np.float32)
-                else:      C[k] = {rg:np.zeros([end-start], dtype=np.float32)}
-        S[rg] = {'L':[],'R':[]}
+    if mem_map_path is None:
+        print('building in mem arrays')
+        for rg in sms:
+            for t in tracks:
+                if t in C: C[t][rg] = np.zeros([end-start,], dtype=np.float32)
+                else:      C[t] = {rg:np.zeros([end-start,], dtype=np.float32)}
+            for v in values: #don't have to deal with 0-div
+                if v in C: C[v][rg] = np.zeros([end-start,], dtype=np.float32)+1.0
+                else:      C[v] = {rg:np.zeros([end-start,], dtype=np.float32)+1.0}
+            if dna:
+                for k in dna_trans:
+                    if k in C: C[k][rg] = np.zeros([end-start], dtype=np.float32)
+                    else:      C[k] = {rg:np.zeros([end-start], dtype=np.float32)}
+            S[rg] = {'L':[],'R':[]}
+    else:
+        print('building mem map arrays for seq=%s'%seq)
+        for rg in sms:
+            for t in tracks:
+                if t in C:
+                    C[t][rg] = np.memmap(mem_map_path+seq+'_trk_'+t+'_rg_'+rg+'.dat', shape=(end-start,),dtype=np.float32,mode='w+')
+                    print(type(C[t][rg]))
+                else:
+                    C[t] = {rg:np.memmap(mem_map_path+seq+'_trk_'+t+'_rg_'+rg+'.dat', shape=(end-start,),dtype=np.float32,mode='w+')}
+            for v in values: #don't have to deal with 0-div
+                if v in C:
+                    C[v][rg] = np.memmap(mem_map_path+seq+'_trk_'+v+'_rg_'+rg+'.dat', shape=(end-start,),dtype=np.float32,mode='w+')
+                    C[v][rg][:] += 1.0
+                else:
+                    C[v] = {rg:np.memmap(mem_map_path+seq+'_trk_'+v+'_rg_'+rg+'.dat', shape=(end-start,),dtype=np.float32,mode='w+')}
+                    C[v][rg][:] += 1.0
+            if dna:
+                for k in dna_trans:
+                    if k in C:
+                        C[k][rg] = np.memmap(mem_map_path+seq+'_trk_'+k+'_rg_'+rg+'.dat', shape=(end-start,),dtype=np.float32,mode='w+')
+                    else:
+                        C[k] = {rg:np.memmap(mem_map_path+seq+'_trk_'+k+'_rg_'+rg+'.dat', shape=(end-start,),dtype=np.float32,mode='w+')}
+            S[rg] = {'L':[],'R':[]}
+        print('finished building the mem map arrays for seq=%s'%seq)
     samfile = AlignmentFile(alignment_path,'rb')
     for read in samfile.fetch(start=start,end=end,region=seq,until_eof=True):
         if read.reference_end is not None and not read.is_duplicate and not read.is_qcfail:

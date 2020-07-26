@@ -29,10 +29,16 @@ parser = argparse.ArgumentParser(description=des,formatter_class=argparse.RawTex
 parser.add_argument('--in_path',type=str,help='sam/bam/cram file or input directory\t[None]')
 parser.add_argument('--ref_path',type=str,help='for cram inputs and realignment based features\t[None]')
 parser.add_argument('--out_dir',type=str,help='output directory\t[None]')
-parser.add_argument('--filter',type=str,help='csv raw bp filter parameters\t[None]')
+filter_help = """semi colon seperated then comma seperated per track pre-filter parameter specification\t[None]
+[syntax] trk:name,value,width,over,mix
+[EX-1] MD:db4,0.5,1E4,0,0.2;
+[EX-2] tlen_dis_rd:poly,1.0,1E9,0,1.0;left_smap_same:poly,1.0,1E9,0,1.0;right_smap_same:poly,1.0,1E9,0,1.0;
+"""
+parser.add_argument('--filter',type=str,help=filter_help)
 parser.add_argument('--window',type=int,help='window size in bp\t[100]')
 parser.add_argument('--branch',type=int,help='window branching factor\t[10]')
 parser.add_argument('--chunk',type=float,help='chunk size in bp per cpu (controls MEM-use/speed)\t[10E6]')
+parser.add_argument('--no_mem_map',action='store_true',help='buffer with memory mapped arrays\t[True]')
 parser.add_argument('--min_smapq',type=int,help='minimum split mapq value for realigned clipped read fragment\t[20]')
 parser.add_argument('--bins',type=str,help='comma-seperated bin counting boundries for spectrum and transition features\t[None]')
 parser.add_argument('--no_merge_rg',action='store_true',help='do not merge all rg into one called "all"\t[False]')
@@ -40,7 +46,12 @@ parser.add_argument('--slide',action='store_true',help='use 1-bp sliding windows
 parser.add_argument('--dna',action='store_true',help='create nucleotide transition tracks\t[False]')
 parser.add_argument('--sub',action='store_true',help='exact ref_seq matching for substitution track\t[False]')
 parser.add_argument('--seqs',type=str,help='comma seperated list of seqs that will be extracted, \t[all in BAM header]')
-t_help = 'comma seperated list of tracks that will be extracted for each seq, all gives every available\t[see defaults]'
+trks  = ['total','primary','alternate','proper_pair','discordant','RD','GC','MD',
+         'mapq_pp','mapq_dis','big_del','deletion','insertion','substitution','splice','fwd_rev_diff',
+         'tlen_pp', 'tlen_pp_rd', 'tlen_dis', 'tlen_dis_rd','right_clipped','left_clipped',
+         'orient_same','orient_out','orient_um','orient_chr',
+         'left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
+t_help = 'comma seperated list of tracks that will be extracted for each seq, all gives every available\t[%s]'%','.join(trks)
 parser.add_argument('--tracks',type=str,help=t_help)
 f_help = 'comma seperated list of features that will be calculated for each track on each sequence, all gives every available\t[moments]'
 parser.add_argument('--features',type=str,help=f_help)
@@ -84,12 +95,14 @@ if args.cpus is not None:     cpus = args.cpus
 else:                         cpus = 1
 if args.no_merge_rg:          merge_rg = False
 else:                         merge_rg = True
+if args.no_mem_map:           mem_map  = None
+else:                         mem_map  = hdf5_path
 if args.window is not None:   w     = args.window
 else:                         w     = 100
 if args.branch is not None:   w_b   = args.branch
 else:                         w_b   = 10
 if args.chunk is not None:    chunk = int(args.chunk)
-else:                         chunk = int(1E7)
+else:                         chunk = int(1E9)
 if args.min_smapq is not None:min_smapq = args.min_smapq
 else:                         min_smapq = 20
 if args.slide is not None:    tile  = not args.slide
@@ -100,18 +113,29 @@ if args.no_clean is None:     end_clean = args.no_clean
 else:                         end_clean = True
 if args.seqs is not None:     seqs  = args.seqs.split(',')
 else:                         seqs  = 'all'
-if args.tracks is not None:   trks  = args.tracks.split(',')
-else:                         trks  = ['total','primary','alternate','proper_pair','discordant','RD','GC','MD',
-                                       'mapq_pp','mapq_dis','big_del','deletion','insertion','substitution','splice','fwd_rev_diff',
-                                       'tlen_pp', 'tlen_pp_rd', 'tlen_dis', 'tlen_dis_rd','right_clipped','left_clipped',
-                                       'orient_same','orient_out','orient_um','orient_chr',
-                                       'left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
-if args.dna:                  trks += ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
+if args.tracks is not None:
+    U = []
+    u_trks  = args.tracks.split(',')
+    for trk in u_trks:
+        if trk in trks: U += [trk]
+    trks = U
+if args.dna:                  trks += ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T',
+                                       'G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
 if args.features is not None: feats = args.features.split(',')
 else:                         feats = ['moments']
-if args.filter is not None:   fltr_params = {'type':args.filter.split(',')[0],'value':float(args.filter.split(',')[1]),
-                                             'width':int(args.filter.split(',')[2]),'over':int(args.filter.split(',')[3]),
-                                             'mix':float(args.filter.split(',')[4])}
+if args.filter is not None: # trk:flt_name,value,width,over,mix; ... [EX] total:db4,0.5,int(1E9),0.0,1.0
+    fltr_params = {}
+    raw_params = args.filter.split(';')
+    for param in raw_params:
+        trk = param.split(':')[0]
+        prms = param.split(':')[-1].split(',')
+        if trk in trks and len(prms)==5:
+            fltr_params[trk] = {'type':prms[0],'value':float(prms[1]),'width':int(float(prms[2])),
+                                'over':int(float(prms[3])),'mix':float(prms[4])}
+    if len(fltr_params)<1:
+        print('filter parameter syntax error:%s'%args.filter)
+        fltr_params = None #error parsing inputs
+    else: print(fltr_params)
 else:                         fltr_params = None
 if args.comp is not None: comp      = args.comp
 else:                     comp      = 'gzip'
@@ -124,7 +148,7 @@ def collect_results(result):
 #can call this in ||----------------------------------------------------------------
 def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,exact_sub=False,
                 tracks=['total'],features=['moments'],filter_params=None,window=100,window_branch=10,chunk=int(10E6),
-                tile=True,tree=True,bins=None,comp='gzip',ref_path=None,min_smapq=20,verbose=False):
+                tile=True,tree=True,bins=None,comp='gzip',ref_path=None,min_smapq=20,mem_map=None,verbose=False):
     result = ''
     start = time.time()
     samples = list(set([sms[k] for k in sms]))
@@ -135,7 +159,7 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,exact_sub=False,
         print('built the hfm object for seq=%s'%seq)
         h.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,exact_sub=exact_sub,
                       tracks=tracks,features=features,filter_params=filter_params,
-                      ref_path=ref_path,min_smapq=min_smapq,verbose=verbose)
+                      ref_path=ref_path,min_smapq=min_smapq,mem_map_path=mem_map,verbose=verbose)
         print('seq %s extracted, starting window updates'%seq[list(seq.keys())[0]])
         if tree and window_branch>1: h.update_seq_tree(base_name,seq,verbose=verbose)
     except Exception as E:
@@ -198,7 +222,7 @@ if type(hdf5_path)==str:
                     seq_args = (alignment_path,base_name,sms,seq,
                                 merge_rg,args.sub,trks,feats,fltr_params,
                                 w,w_b,chunk,tile,True,bins,
-                                comp,args.ref_path,min_smapq,True)
+                                comp,args.ref_path,min_smapq,mem_map,True)
                     p1.apply_async(process_seq,args=seq_args,callback=collect_results)
                     time.sleep(0.25)
             p1.close()
