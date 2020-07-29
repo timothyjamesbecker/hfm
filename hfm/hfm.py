@@ -688,9 +688,9 @@ class HFM:
             for t in ts:
                 rgs = sorted(self.A[t])
                 for rg in rgs: del self.A[t][rg] #close up the maps
-            print('closed the following memmap files:%s'%','.join(glob.glob(mem_map_path+'/*.dat')))
+            print('closed the following memmap files:%s'%','.join(glob.glob(mem_map_path+'/%s*.dat'%seq)))
             try:
-                for file in glob.glob(mem_map_path+'/*.dat'): os.remove(file)
+                for file in glob.glob(mem_map_path+'/%s*.dat'%seq): os.remove(file)
                 print('cleaned all memmap files for seq=%s'%seq)
             except Exception as E:
                 print('issues with cleaning memmap files for seq=%s'%seq)
