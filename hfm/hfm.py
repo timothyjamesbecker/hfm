@@ -682,18 +682,18 @@ class HFM:
         #FULL----------------------------------------------------------------------------------------------------FULL
         #POST----------------------------------------------------------------------------------------------------POST
         self.f.close()
-        print('closing the memmaps on seq=%s'%seq)
+        print('closing the memmaps on seq=%s'%list(seq.keys())[0])
         if mem_map_path is not None:
             ts = sorted(self.A.keys())
             for t in ts:
                 rgs = sorted(self.A[t])
                 for rg in rgs: del self.A[t][rg] #close up the maps
-            print('closed the following memmap files:%s'%','.join(glob.glob(mem_map_path+'/%s*.dat'%seq)))
+            print('closed the following memmap files:%s'%','.join(glob.glob(mem_map_path+'/%s*.dat'%list(seq.keys())[0])))
             try:
-                for file in glob.glob(mem_map_path+'/%s*.dat'%seq): os.remove(file)
-                print('cleaned all memmap files for seq=%s'%seq)
+                for file in glob.glob(mem_map_path+'/%s*.dat'%list(seq.keys())[0]): os.remove(file)
+                print('cleaned all memmap files for seq=%s'%list(seq.keys())[0])
             except Exception as E:
-                print('issues with cleaning memmap files for seq=%s'%seq)
+                print('issues with cleaning memmap files for seq=%s'%list(seq.keys())[0])
                 print(E)
                 pass
         self.A = None
