@@ -188,7 +188,7 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,exact_sub=False,
                     window_root=window_root,bins=bins,chunk=corrected_no_mem_chunk,compression=comp)
             print('built the hfm object for seq=%s'%seq)
             h.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,exact_sub=exact_sub,
-                              tracks=no_mem_map_tracks,features=features,filter_params=filter_params,
+                              tracks=mem_map_tracks,features=features,filter_params=filter_params,
                               ref_path=ref_path,min_smapq=min_smapq,mem_map_path=mem_map,verbose=verbose)
 
         else:
