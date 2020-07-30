@@ -176,7 +176,7 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,exact_sub=False,
             #first do the tracks that don't need memory mapping accross the sequence------------------------
             no_mem_map_tracks = sorted(list(set(tracks).difference(mem_map_tracks+add_on_tracks)))
             h = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
-                    window_root=window_root,bins=bins,chunk=corrected_mem_chunk,compression=comp)
+                    window_root=window_root,bins=bins,chunk=corrected_no_mem_chunk,compression=comp)
             print('built the hfm object for seq=%s'%seq)
             h.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,exact_sub=exact_sub,
                               tracks=no_mem_map_tracks,features=features,filter_params=filter_params,
@@ -185,7 +185,7 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,exact_sub=False,
             #now complete the tracks and their dependancies that need memory mapping accross the sequence---
             mem_map_tracks = sorted(list(set(mem_map_tracks+add_on_tracks).difference(tracks)))
             h = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
-                    window_root=window_root,bins=bins,chunk=corrected_no_mem_chunk,compression=comp)
+                    window_root=window_root,bins=bins,chunk=corrected_mem_chunk,compression=comp)
             print('built the hfm object for seq=%s'%seq)
             h.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,exact_sub=exact_sub,
                               tracks=mem_map_tracks,features=features,filter_params=filter_params,
