@@ -96,7 +96,7 @@ else:                         cpus = 1
 if args.no_merge_rg:          merge_rg = False
 else:                         merge_rg = True
 if args.no_mem_map:           mem_map  = None
-else:                         mem_map  = hdf5_path
+else:                         mem_map  = hdf5_path+'/seqs/'
 if args.window is not None:   w     = args.window
 else:                         w     = 100
 if args.branch is not None:   w_b   = args.branch
@@ -157,19 +157,47 @@ def collect_results(result):
 
 #can call this in ||----------------------------------------------------------------
 def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,exact_sub=False,
-                tracks=['total'],features=['moments'],filter_params=None,window=100,window_branch=10,chunk=int(10E6),
-                tile=True,tree=True,bins=None,comp='gzip',ref_path=None,min_smapq=20,mem_map=None,verbose=False):
+                tracks=['total'],features=['moments'],filter_params=None,window=100,window_branch=10,
+                chunk=int(10E6),window_root=int(1E9),tile=True,tree=True,bins=None,comp='gzip',
+                ref_path=None,min_smapq=20,mem_map=None,mm_chunk=int(3E8),no_mm_chunk=int(10E6),verbose=False):
     result = ''
     start = time.time()
     samples = list(set([sms[k] for k in sms]))
     corrected_chunk = int(max(window,window*(int(chunk//len(sms))//window)))
+    mem_map_tracks = ['tlen_dis_rd','tlen_pp_rd','left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
+    mem_map_tracks = sorted(list(set(mem_map_tracks).intersection(set(tracks))))
     try:
-        h = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
-                    window_root=int(1E9),bins=bins,chunk=corrected_chunk,compression=comp)
-        print('built the hfm object for seq=%s'%seq)
-        h.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,exact_sub=exact_sub,
-                      tracks=tracks,features=features,filter_params=filter_params,
-                      ref_path=ref_path,min_smapq=min_smapq,mem_map_path=mem_map,verbose=verbose)
+        # need to do discordant and propper pair for tlen_pp_rd and tlen_dis_rd
+        if len(mem_map_tracks)>0:
+            corrected_mem_chunk    = int(max(window,mm_chunk))
+            corrected_no_mem_chunk = int(max(window,window*(int(no_mm_chunk//len(sms))//window)))
+            add_on_tracks = ['discordant','proper_pair','tlen_dis','tlen_pp','mapq_dis','mapq_pp']
+
+            #first do the tracks that don't need memory mapping accross the sequence------------------------
+            no_mem_map_tracks = sorted(list(set(tracks).difference(mem_map_tracks+add_on_tracks)))
+            h = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
+                    window_root=window_root,bins=bins,chunk=corrected_mem_chunk,compression=comp)
+            print('built the hfm object for seq=%s'%seq)
+            h.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,exact_sub=exact_sub,
+                              tracks=no_mem_map_tracks,features=features,filter_params=filter_params,
+                              ref_path=ref_path,min_smapq=min_smapq,mem_map_path=None,verbose=verbose)
+
+            #now complete the tracks and their dependancies that need memory mapping accross the sequence---
+            mem_map_tracks = sorted(list(set(mem_map_tracks+add_on_tracks).difference(tracks)))
+            h = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
+                    window_root=window_root,bins=bins,chunk=corrected_no_mem_chunk,compression=comp)
+            print('built the hfm object for seq=%s'%seq)
+            h.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,exact_sub=exact_sub,
+                              tracks=no_mem_map_tracks,features=features,filter_params=filter_params,
+                              ref_path=ref_path,min_smapq=min_smapq,mem_map_path=mem_map,verbose=verbose)
+
+        else:
+            h = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
+                    window_root=window_root,bins=bins,chunk=corrected_chunk,compression=comp)
+            print('built the hfm object for seq=%s'%seq)
+            h.extract_seq(alignment_path,base_name,sms,seq,merge_rg=merge_rg,exact_sub=exact_sub,
+                          tracks=tracks,features=features,filter_params=filter_params,
+                          ref_path=ref_path,min_smapq=min_smapq,mem_map_path=None,verbose=verbose)
         print('seq %s extracted, starting window updates'%seq[list(seq.keys())[0]])
         if tree and window_branch>1: h.update_seq_tree(base_name,seq,verbose=verbose)
     except Exception as E:
@@ -231,8 +259,8 @@ if type(hdf5_path)==str:
                 if not os.path.exists(base_name+'.seq.'+seq[list(seq.keys())[0]]+'.hdf5'):
                     seq_args = (alignment_path,base_name,sms,seq,
                                 merge_rg,args.sub,trks,feats,fltr_params,
-                                w,w_b,chunk,tile,True,bins,
-                                comp,args.ref_path,min_smapq,mem_map,True)
+                                w,w_b,chunk,int(1E9),tile,True,bins,
+                                comp,args.ref_path,min_smapq,mem_map,int(3E8),int(10E6),True)
                     p1.apply_async(process_seq,args=seq_args,callback=collect_results)
                     time.sleep(0.25)
             p1.close()

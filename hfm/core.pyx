@@ -76,6 +76,11 @@ def edit_dist_str(str s1, str s2, list w=[1,1,1]):
 @cython.nonecheck(False)
 @cython.wraparound(False)
 def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int end,
+                          select=['alternate','orient_same','orient_out','orient_um','orient_chr','splice',
+                                  'right_clipped','left_clipped','big_del','deletion','insertion','substitution','fwd_rev_diff',
+                                  'total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis',
+                                  'tlen_pp','tlen_dis','tlen_pp_rd','tlen_dis_rd','RD','GC','MD',
+                                  'left_smap_same','left_smap_diff','right_smap_same','right_smap_diff'],
                           bint merge_rg=True, bint dna=False, bint exact_sub=False,
                           str ref_seq = None, str align_preset = 'sr',
                           int min_anchor=36, int min_clip=18, int min_smapq=20, int big_del=36,
@@ -90,9 +95,11 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
     C,S,rg = {},{},'all'
     tracks = ['alternate','orient_same','orient_out','orient_um','orient_chr','right_anchor','left_anchor','splice',
               'right_clipped','left_clipped','clipped','big_del','deletion','insertion','substitution','fwd_rev_diff']
+    tracks = sorted(list(set(select).intersection(set(tracks))))
     values = ['total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis',
               'tlen','tlen_pp','tlen_dis','tlen_pp_rd','tlen_dis_rd','orient_same_rd','orient_out_rd','RD','GC','MD',
               'smap_same','smap_diff','left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
+    values = sorted(list(set(select).intersection(set(values))))
     dna_trans = ['A-A','A-C','A-G','A-T','C-A','C-C','C-G','C-T','G-A','G-C','G-G','G-T','T-A','T-C','T-G','T-T']
     if merge_rg: sms = {'all':'-'.join(sorted(list(set(sms.values()))))} #duplicated from the safe lib
     if mem_map_path is None:
@@ -160,37 +167,40 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
                     if tags[j][0]=='RG':     #no matching to prexisting rg here...
                         rg = tags[j][1]
                         break
-            C['total'][rg][a:b]            += 1.0
-            C['mapq'][rg][a:b]             += mapq
-            C['tlen'][rg][a:b]             += tlen
+            if 'total' in C:                          C['total'][rg][a:b]        += 1.0
+            if 'mapq' in C:                           C['mapq'][rg][a:b]         += mapq
+            if 'tlen' in C:                           C['tlen'][rg][a:b]         += tlen
             if read.is_proper_pair:
-                C['proper_pair'][rg][a:b]  += 1.0
-                C['mapq_pp'][rg][a:b]      += mapq
-                C['tlen_pp'][rg][a:b]      += tlen
-                if tlen>0.0:   C['tlen_pp_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
-                elif tlen<0.0: C['tlen_pp_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
+                if 'proper_pair' in C:                C['proper_pair'][rg][a:b]  += 1.0
+                if 'mapq_pp' in C:                    C['mapq_pp'][rg][a:b]      += mapq
+                if 'tlen_pp' in C:                    C['tlen_pp'][rg][a:b]      += tlen
+                if 'tlen_pp_rd' in C and tlen>0.0:    C['tlen_pp_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
+                elif 'tlen_pp_rd' in C and tlen<0.0:  C['tlen_pp_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
             elif tid==mid and not read.mate_is_unmapped:
-                C['discordant'][rg][a:b]   += 1.0
-                C['mapq_dis'][rg][a:b]     += mapq
-                C['tlen_dis'][rg][a:b]     += tlen
-                if tlen>0.0:   C['tlen_dis_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
-                elif tlen<0.0: C['tlen_dis_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
-            if not read.is_supplementary and not read.is_secondary:  C['primary'][rg][a:b]      += 1.0
-            else:                                                    C['alternate'][rg][a:b]    += 1.0
-            if not read.is_reverse:                                  C['fwd_rev_diff'][rg][a:b] += 1.0
-            else:                                                    C['fwd_rev_diff'][rg][a:b] -= 1.0
+                if 'discordant' in C:                 C['discordant'][rg][a:b]   += 1.0
+                if 'mapq_dis' in C:                   C['mapq_dis'][rg][a:b]     += mapq
+                if 'tlen_dis' in C:                   C['tlen_dis'][rg][a:b]     += tlen
+                if 'tlen_dis_rd' in C and tlen>0.0:   C['tlen_dis_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
+                elif 'tlen_dis_rd' in C and tlen<0.0: C['tlen_dis_rd'][rg][max(0,a+tlen):b]         += 1.0 #neg tlen projection across RD
+            if not read.is_supplementary and not read.is_secondary:
+                if 'primary' in C:     C['primary'][rg][a:b]      += 1.0
+            else:
+                if 'alternate' in C:   C['alternate'][rg][a:b]    += 1.0
+            if 'fwd_rev_diff' in C:
+                if not read.is_reverse:C['fwd_rev_diff'][rg][a:b] += 1.0
+                else:                  C['fwd_rev_diff'][rg][a:b] -= 1.0
             if ((read.is_reverse and read.mate_is_reverse) or\
                 (not read.is_reverse and not read.mate_is_reverse)):
-                C['orient_same'][rg][a:b]  += 1.0
-                if tlen>0.0:   C['orient_same_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
-                elif tlen<0.0: C['orient_same_rd'][rg][max(0,a+tlen):b]         += 1.0
+                if 'orient_same' in C:                       C['orient_same'][rg][a:b]  += 1.0
+                if 'orient_same_rd' in C and tlen>0.0:       C['orient_same_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
+                elif 'orient_same_rd' in C and tlen<0.0:     C['orient_same_rd'][rg][max(0,a+tlen):b]         += 1.0
             elif ((read.is_reverse and tlen>0) or\
                 (not read.is_reverse and tlen <0)):
-                C['orient_out'][rg][a:b]   += 1.0
-                if tlen>0.0:   C['orient_out_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
-                elif tlen<0.0: C['orient_out_rd'][rg][max(0,a+tlen):b]         += 1.0
-            elif read.mate_is_unmapped:                              C['orient_um'][rg][a:b]    += 1.0
-            elif tid!=mid:                                           C['orient_chr'][rg][a:b]   += 1.0
+                if 'orient_out' in C:                        C['orient_out'][rg][a:b]   += 1.0
+                if 'orient_out_rd' in C and tlen>0.0:        C['orient_out_rd'][rg][a:min(b+tlen,end-start)] += 1.0   #tlen projection across RD
+                elif 'orient_out_rd' in C and tlen<0.0:      C['orient_out_rd'][rg][max(0,a+tlen):b]         += 1.0
+            elif 'orient_um' in C and read.mate_is_unmapped: C['orient_um'][rg][a:b]    += 1.0
+            elif 'orient_chr' in C and tid!=mid:             C['orient_chr'][rg][a:b]   += 1.0
             if len(sequence)>0:
                 C['GC'][rg][a:b]  += <float>(sequence.count('G')+sequence.count('C'))/<float>(len(sequence))
                 if dna: #dna transistion feature calculations
@@ -226,50 +236,60 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
                         e = min(a+cigar_list[0][1],b)
                         f = min(a+cigar_list[0][2],b)
                         if f-e>=min_clip:
-                            C['clipped'][rg][e:f]       += 1.0
-                            C['left_clipped'][rg][e:f]  += 1.0
+                            if 'clipped' in C:          C['clipped'][rg][e:f]       += 1.0
+                            if 'left_clipped' in C:     C['left_clipped'][rg][e:f]  += 1.0
                             S[rg]['L'] += [[sequence[:cigar[0][1]],cigar,
                                             pos+cigar[0][1],tlen,(-1 if read.is_reverse else 1)]]
                         if cigar_list[len(cigar_list)-1][0]==0 or cigar_list[len(cigar_list)-1][0]==7: #'M' or '='
                             if f-e>=min_anchor:
-                                C['right_anchor'][rg][e:f] += 1.0
+                                if 'right_anchor' in C: C['right_anchor'][rg][e:f]  += 1.0
                     if cigar_list[len(cigar_list)-1][0]==4 or cigar_list[len(cigar_list)-1][0]==5: #'S' or 'H'
                         e = min(a+cigar_list[len(cigar_list)-1][1],b)
                         f = min(a+cigar_list[len(cigar_list)-1][2],b)
                         if f-e>=min_clip:
-                            C['clipped'][rg][e:f]       += 1.0
-                            C['right_clipped'][rg][e:f] += 1.0
+                            if 'clipped' in C:          C['clipped'][rg][e:f]       += 1.0
+                            if 'right_clipped' in C:    C['right_clipped'][rg][e:f] += 1.0
                             S[rg]['R'] += [[sequence[cigar[len(cigar_list)-1][1]:],cigar,
                                             pos-cigar[len(cigar_list)-1][1],tlen,(-1 if read.is_reverse else 1)]]
                         if cigar_list[0][0]==0 or cigar_list[0][0]==7: #'M'
                             if f-e>=min_anchor:
-                                C['left_anchor'][rg][e:f] += 1.0
+                                if 'left_anchor' in C:  C['left_anchor'][rg][e:f]   += 1.0
                     if ref_seq is not None and exact_sub:
                         for i in range(len(cigar_list)):
                             e = min(a+cigar_list[i][1],b)
                             f = min(a+cigar_list[i][2],b)
-                            if cigar_list[i][0]==1: C['insertion'][rg][e-1:f]  += 1.0  #single coordinates
+                            if cigar_list[i][0]==1:
+                                if 'insertion' in C:            C['insertion'][rg][e-1:f]    += 1.0  #single coordinates
                             if cigar_list[i][0]==2:
-                                C['deletion'][rg][e:f] += 1.0
-                                if f-e>=big_del:    C['big_del'][rg][e:f]      += 1.0
-                            if cigar_list[i][0]==3: C['splice'][rg][e:f]       += 1.0
+                                if 'deletion' in C:             C['deletion'][rg][e:f]       += 1.0
+                                if f-e>=big_del:
+                                    if 'big_del' in C:          C['big_del'][rg][e:f]        += 1.0
+                            if cigar_list[i][0]==3:
+                                if 'splice' in C:               C['splice'][rg][e:f]         += 1.0
                             if cigar_list[i][0]==0 or cigar_list[i][0]==7: #check matches for subs
                                 for j in range(cigar_list[i][1],cigar_list[i][2],1):
-                                    if sequence[j]!=ref_seq[pos+j]: C['substitution'][rg][a+j-c] += 1.0
+                                    if sequence[j]!=ref_seq[pos+j]:
+                                        if 'substitution' in C: C['substitution'][rg][a+j-c] += 1.0
                     else: #this is the more acurate exact matching algorithm-----------------------------
                         for i in range(len(cigar_list)):
                             e = min(a+cigar_list[i][1],b)
                             f = min(a+cigar_list[i][2],b)
-                            if cigar_list[i][0]==1: C['insertion'][rg][e-1:f]  += 1.0  #single coordinates
+                            if cigar_list[i][0]==1:
+                                if 'insertion' in C:            C['insertion'][rg][e-1:f]    += 1.0  #single coordinates
                             if cigar_list[i][0]==2:
                                 C['deletion'][rg][e:f] += 1.0
-                                if f-e>=big_del:    C['big_del'][rg][e:f]      += 1.0
-                            if cigar_list[i][0]==8: C['substitution'][rg][e:f] += 1.0
-                            if cigar_list[i][0]==3: C['splice'][rg][e:f]       += 1.0
+                                if f-e>=big_del:
+                                    if 'big_del' in C:          C['big_del'][rg][e:f]        += 1.0
+                            if cigar_list[i][0]==8:
+                                if 'substitution' in C:         C['substitution'][rg][e:f]   += 1.0
+                            if cigar_list[i][0]==3:
+                                if 'splice' in C:               C['splice'][rg][e:f]         += 1.0
             #cigar ops based calculations---------------------
     samfile.close()
     #'total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis','tlen','tlen_pp','tlen_dis','len_diff','tlen_rd','big_del','RD','GC'
-    if ref_seq is not None: #minimap2=>mappy based soft-clipped re-alignment
+    if ('left_smap_same' in C or 'left_smap_diff' in C or\
+            'right_smap_same' in C or 'right_smap_diff' in C or\
+            'smap_same' in C or 'smap_diff' in C) and ref_seq is not None: #minimap2=>mappy based soft-clipped re-alignment
         al = mappy.Aligner(seq=ref_seq,preset=align_preset,n_threads=0)
         print('aligning %s split read fragments to seq=%s from rgs=%s'%(sum([len(S[rg]) for rg in S]),seq,','.join(list(S.keys()))))
         for rg in S:
@@ -298,62 +318,112 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
                     f = max(0,min(A[k][i][1]-start,end))
                     if e>f: f,e = e,f
                     if A[k][i][3]:
-                        if k=='L': C['left_smap_same'][rg][e:f]  += 1.0
-                        else:      C['right_smap_same'][rg][e:f] += 1.0
-                        C['smap_same'][rg][e:f] += 1.0
+                        if k=='L':
+                            if 'left_smap_same' in C:  C['left_smap_same'][rg][e:f]  += 1.0
+                        else:
+                            if 'right_smap_same' in C: C['right_smap_same'][rg][e:f] += 1.0
+                        if 'smap_same' in C:           C['smap_same'][rg][e:f] += 1.0
                     else:
-                        if k=='L': C['left_smap_diff'][rg][e:f]  += 1.0
-                        else:      C['right_smap_diff'][rg][e:f] += 1.0
-                        C['smap_diff'][rg][e:f] += 1.0
+                        if k=='L':
+                            if 'left_samp_diff' in C:  C['left_smap_diff'][rg][e:f]  += 1.0
+                        else:
+                            if 'right_smap_diff' in C: C['right_smap_diff'][rg][e:f] += 1.0
+                        if 'smap_diff' in C:           C['smap_diff'][rg][e:f] += 1.0
     if not merge_rg:
         for rg in sms:
-            C['RD'][rg]              = (2.0*C['primary'][rg])*(C['GC'][rg]/C['total'][rg])
-            C['MD'][rg]              = C['RD'][rg]*(np.clip((C['mapq'][rg]/C['total'][rg]-1.0)/60.0,0.0,1.0))
-            C['GC'][rg]              = C['GC'][rg]-1.0
-            C['mapq'][rg]            = C['mapq'][rg]/C['total'][rg]-1.0
-            C['mapq_pp'][rg]         = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
-            C['mapq_dis'][rg]        = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
-            C['tlen'][rg]            = C['tlen'][rg]/C['total'][rg]-1.0
-            C['orient_same_rd'][rg]  = C['orient_same_rd'][rg]/C['total'][rg]-1.0
-            C['orient_out_rd'][rg]   = C['orient_out_rd'][rg]/C['total'][rg]-1.0
-            C['tlen_pp'][rg]         = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
-            C['tlen_pp_rd'][rg]      = C['tlen_pp_rd'][rg]/C['proper_pair'][rg]-1.0
-            C['tlen_dis'][rg]        = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
-            C['tlen_dis_rd'][rg]     = C['tlen_dis_rd'][rg]/C['discordant'][rg]-1.0
-            C['discordant'][rg]      = C['discordant'][rg]-1.0
-            C['proper_pair'][rg]     = C['proper_pair'][rg]-1.0
-            C['primary'][rg]         = C['primary'][rg]-1.0
-            C['total'][rg]           = C['total'][rg]-1.0
-            C['smap_same'][rg]       = C['smap_same'][rg]-1.0
-            C['smap_diff'][rg]       = C['smap_diff'][rg]-1.0
-            C['left_smap_same'][rg]  = C['left_smap_same'][rg]-1.0
-            C['left_smap_diff'][rg]  = C['left_smap_diff'][rg]-1.0
-            C['right_smap_same'][rg] = C['right_smap_same'][rg]-1.0
-            C['right_smap_diff'][rg] = C['right_smap_diff'][rg]-1.0
+            if 'RD' in C and 'primary' in C and 'GC' in C and 'total' in C:
+                C['RD'][rg]              = (2.0*C['primary'][rg])*(C['GC'][rg]/C['total'][rg])
+                if 'mapq' in C:
+                    C['MD'][rg]          = C['RD'][rg]*(np.clip((C['mapq'][rg]/C['total'][rg]-1.0)/60.0,0.0,1.0))
+            if 'GC' in C:
+                C['GC'][rg]              = C['GC'][rg]-1.0
+            if 'mapq' in C:
+                C['mapq'][rg]            = C['mapq'][rg]/C['total'][rg]-1.0
+            if 'mapq_pp' in C:
+                C['mapq_pp'][rg]         = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
+            if 'mapq_dis' in C:
+                C['mapq_dis'][rg]        = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
+            if 'tlen' in C:
+                C['tlen'][rg]            = C['tlen'][rg]/C['total'][rg]-1.0
+            if 'orient_same_rd' in C:
+                C['orient_same_rd'][rg]  = C['orient_same_rd'][rg]/C['total'][rg]-1.0
+            if 'orient_out_rd' in C:
+                C['orient_out_rd'][rg]   = C['orient_out_rd'][rg]/C['total'][rg]-1.0
+            if 'tlen_pp' in C:
+                C['tlen_pp'][rg]         = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
+            if 'tlen_pp_rd' in C:
+                C['tlen_pp_rd'][rg]      = C['tlen_pp_rd'][rg]/C['proper_pair'][rg]-1.0
+            if 'tlen_dis' in C:
+                C['tlen_dis'][rg]        = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
+            if 'tlen_dis_rd' in C:
+                C['tlen_dis_rd'][rg]     = C['tlen_dis_rd'][rg]/C['discordant'][rg]-1.0
+            if 'discordant' in C:
+                C['discordant'][rg]      = C['discordant'][rg]-1.0
+            if 'proper_pair' in C:
+                C['proper_pair'][rg]     = C['proper_pair'][rg]-1.0
+            if 'primary' in C:
+                C['primary'][rg]         = C['primary'][rg]-1.0
+            if 'total' in C:
+                C['total'][rg]           = C['total'][rg]-1.0
+            if 'smap_same' in C:
+                C['smap_same'][rg]       = C['smap_same'][rg]-1.0
+            if 'smap_same' in C:
+                C['smap_diff'][rg]       = C['smap_diff'][rg]-1.0
+            if 'left_smap_same' in C:
+                C['left_smap_same'][rg]  = C['left_smap_same'][rg]-1.0
+            if 'left_smap_diff' in C:
+                C['left_smap_diff'][rg]  = C['left_smap_diff'][rg]-1.0
+            if 'right_smap_same' in C:
+                C['right_smap_same'][rg] = C['right_smap_same'][rg]-1.0
+            if 'right_smap_diff' in C:
+                C['right_smap_diff'][rg] = C['right_smap_diff'][rg]-1.0
     else:
-        C['RD'][rg]              = (2.0*C['primary'][rg])*(C['GC'][rg]/C['total'][rg])
-        C['MD'][rg]              = C['RD'][rg]*(np.clip((C['mapq'][rg]/C['total'][rg]-1.0)/60.0,0.0,1.0))
-        C['GC'][rg]              = C['GC'][rg]-1.0
-        C['mapq'][rg]            = C['mapq'][rg]/C['total'][rg]-1.0
-        C['mapq_pp'][rg]         = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
-        C['mapq_dis'][rg]        = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
-        C['tlen'][rg]            = C['tlen'][rg]/C['total'][rg]-1.0
-        C['orient_same_rd'][rg]  = C['orient_same_rd'][rg]/C['total'][rg]-1.0
-        C['orient_out_rd'][rg]   = C['orient_out_rd'][rg]/C['total'][rg]-1.0
-        C['tlen_pp'][rg]         = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
-        C['tlen_pp_rd'][rg]      = C['tlen_pp_rd'][rg]/C['proper_pair'][rg]-1.0
-        C['tlen_dis'][rg]        = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
-        C['tlen_dis_rd'][rg]     = C['tlen_dis_rd'][rg]/C['discordant'][rg]-1.0
-        C['discordant'][rg]      = C['discordant'][rg]-1.0
-        C['proper_pair'][rg]     = C['proper_pair'][rg]-1.0
-        C['primary'][rg]         = C['primary'][rg]-1.0
-        C['total'][rg]           = C['total'][rg]-1.0
-        C['smap_same'][rg]       = C['smap_same'][rg]-1.0
-        C['smap_diff'][rg]       = C['smap_diff'][rg]-1.0
-        C['left_smap_same'][rg]  = C['left_smap_same'][rg]-1.0
-        C['left_smap_diff'][rg]  = C['left_smap_diff'][rg]-1.0
-        C['right_smap_same'][rg] = C['right_smap_same'][rg]-1.0
-        C['right_smap_diff'][rg] = C['right_smap_diff'][rg]-1.0
+        if 'RD' in C and 'primary' in C and 'GC' in C and 'total' in C:
+                C['RD'][rg]              = (2.0*C['primary'][rg])*(C['GC'][rg]/C['total'][rg])
+                if 'mapq' in C:
+                    C['MD'][rg]          = C['RD'][rg]*(np.clip((C['mapq'][rg]/C['total'][rg]-1.0)/60.0,0.0,1.0))
+        if 'GC' in C:
+            C['GC'][rg]              = C['GC'][rg]-1.0
+        if 'mapq' in C:
+            C['mapq'][rg]            = C['mapq'][rg]/C['total'][rg]-1.0
+        if 'mapq_pp' in C:
+            C['mapq_pp'][rg]         = C['mapq_pp'][rg]/C['proper_pair'][rg]-1.0
+        if 'mapq_dis' in C:
+            C['mapq_dis'][rg]        = C['mapq_dis'][rg]/C['discordant'][rg]-1.0
+        if 'tlen' in C:
+            C['tlen'][rg]            = C['tlen'][rg]/C['total'][rg]-1.0
+        if 'orient_same_rd' in C:
+            C['orient_same_rd'][rg]  = C['orient_same_rd'][rg]/C['total'][rg]-1.0
+        if 'orient_out_rd' in C:
+            C['orient_out_rd'][rg]   = C['orient_out_rd'][rg]/C['total'][rg]-1.0
+        if 'tlen_pp' in C:
+            C['tlen_pp'][rg]         = C['tlen_pp'][rg]/C['proper_pair'][rg]-1.0
+        if 'tlen_pp_rd' in C:
+            C['tlen_pp_rd'][rg]      = C['tlen_pp_rd'][rg]/C['proper_pair'][rg]-1.0
+        if 'tlen_dis' in C:
+            C['tlen_dis'][rg]        = C['tlen_dis'][rg]/C['discordant'][rg]-1.0
+        if 'tlen_dis_rd' in C:
+            C['tlen_dis_rd'][rg]     = C['tlen_dis_rd'][rg]/C['discordant'][rg]-1.0
+        if 'discordant' in C:
+            C['discordant'][rg]      = C['discordant'][rg]-1.0
+        if 'proper_pair' in C:
+            C['proper_pair'][rg]     = C['proper_pair'][rg]-1.0
+        if 'primary' in C:
+            C['primary'][rg]         = C['primary'][rg]-1.0
+        if 'total' in C:
+            C['total'][rg]           = C['total'][rg]-1.0
+        if 'smap_same' in C:
+            C['smap_same'][rg]       = C['smap_same'][rg]-1.0
+        if 'smap_same' in C:
+            C['smap_diff'][rg]       = C['smap_diff'][rg]-1.0
+        if 'left_smap_same' in C:
+            C['left_smap_same'][rg]  = C['left_smap_same'][rg]-1.0
+        if 'left_smap_diff' in C:
+            C['left_smap_diff'][rg]  = C['left_smap_diff'][rg]-1.0
+        if 'right_smap_same' in C:
+            C['right_smap_same'][rg] = C['right_smap_same'][rg]-1.0
+        if 'right_smap_diff' in C:
+            C['right_smap_diff'][rg] = C['right_smap_diff'][rg]-1.0
     return C
 
 #[0] utilities
