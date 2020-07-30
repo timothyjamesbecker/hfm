@@ -682,7 +682,6 @@ class HFM:
         #FULL----------------------------------------------------------------------------------------------------FULL
         #POST----------------------------------------------------------------------------------------------------POST
         self.f.close()
-        print('closing the memmaps on seq=%s'%list(seq.keys())[0])
         if mem_map_path is not None:
             ts = sorted(self.A.keys())
             for t in ts:
