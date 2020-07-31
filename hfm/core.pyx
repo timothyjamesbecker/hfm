@@ -325,7 +325,7 @@ def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int 
                         if 'smap_same' in C:           C['smap_same'][rg][e:f] += 1.0
                     else:
                         if k=='L':
-                            if 'left_samp_diff' in C:  C['left_smap_diff'][rg][e:f]  += 1.0
+                            if 'left_smap_diff' in C:  C['left_smap_diff'][rg][e:f]  += 1.0
                         else:
                             if 'right_smap_diff' in C: C['right_smap_diff'][rg][e:f] += 1.0
                         if 'smap_diff' in C:           C['smap_diff'][rg][e:f] += 1.0
