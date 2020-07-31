@@ -218,11 +218,11 @@ class HFM:
         self.__M1__,self.__M2__,self.__M3__,self.__M4__ = [x for x in range(8)]
         self.__MN__,self.__SN__,self.__TN__ = 8,len(self.__bins__)-1,len(self.__bins__)-1
         self.__moments__  = ['N','SUM','MIN','MAX','M1','M2','M3','M4']
-        self.__tracks__   = ['total','primary','mapq','RD','MD','discordant','fwd_rev_diff',
-                             'right_clipped','left_clipped','big_del','insertion','substitution',
-                             'tlen','tlen_rd','orient_same','orient_out','orient_um','orient_chr',
-                             'smap_same','smap_diff','left_smap_same','left_smap_diff',
-                             'right_smap_same','right_smap_diff']
+        self.__tracks__   = ['total','primary','alternate','proper_pair','discordant','RD','GC','MD','mapq',
+                             'mapq_pp','mapq_dis','big_del','deletion','insertion','substitution','splice','fwd_rev_diff',
+                             'tlen_pp', 'tlen_pp_rd', 'tlen_dis', 'tlen_dis_rd','clipped','right_clipped','left_clipped',
+                             'orient_same','orient_out','orient_um','orient_chr',
+                             'left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
         self.__features__ = ['moments','spectrum','transitions']
         self.__buffer__ = None
 

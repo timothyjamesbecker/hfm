@@ -46,9 +46,9 @@ parser.add_argument('--slide',action='store_true',help='use 1-bp sliding windows
 parser.add_argument('--dna',action='store_true',help='create nucleotide transition tracks\t[False]')
 parser.add_argument('--sub',action='store_true',help='exact ref_seq matching for substitution track\t[False]')
 parser.add_argument('--seqs',type=str,help='comma seperated list of seqs that will be extracted, \t[all in BAM header]')
-trks  = ['total','primary','alternate','proper_pair','discordant','RD','GC','MD',
+trks  = ['total','primary','alternate','proper_pair','discordant','RD','GC','MD','mapq',
          'mapq_pp','mapq_dis','big_del','deletion','insertion','substitution','splice','fwd_rev_diff',
-         'tlen_pp', 'tlen_pp_rd', 'tlen_dis', 'tlen_dis_rd','right_clipped','left_clipped',
+         'tlen_pp', 'tlen_pp_rd', 'tlen_dis', 'tlen_dis_rd','clipped','right_clipped','left_clipped',
          'orient_same','orient_out','orient_um','orient_chr',
          'left_smap_same','left_smap_diff','right_smap_same','right_smap_diff']
 t_help = 'comma seperated list of tracks that will be extracted for each seq, all gives every available\t[%s]'%','.join(trks)
@@ -183,7 +183,7 @@ def process_seq(alignment_path,base_name,sms,seq,merge_rg=True,exact_sub=False,
                               ref_path=ref_path,min_smapq=min_smapq,mem_map_path=None,verbose=verbose)
 
             #now complete the tracks and their dependancies that need memory mapping accross the sequence---
-            mem_map_tracks = sorted(list(set(mem_map_tracks+add_on_tracks).difference(tracks)))
+            mem_map_tracks = sorted(list(set(mem_map_tracks+add_on_tracks).difference(no_mem_map_tracks)))
             h = hfm.HFM(tile=tile,window=window,window_branch=window_branch,
                     window_root=window_root,bins=bins,chunk=corrected_mem_chunk,compression=comp)
             print('built the hfm object for seq=%s'%seq)
@@ -257,6 +257,21 @@ if type(hdf5_path)==str:
                   (len(set(sms.values())),len(sms),merge_rg,trks,feats,w,w_b,tile))
             for seq in S: #|| on seq
                 if not os.path.exists(base_name+'.seq.'+seq[list(seq.keys())[0]]+'.hdf5'):
+                    # debug--------------------
+                    # merge_rg=True
+                    # exact_sub=False
+                    # tracks=trks
+                    # features=feats
+                    # filter_params=fltr_params
+                    # window=w
+                    # window_branch=w_b,
+                    # window_root=int(1E9)
+                    # tree=True
+                    # ref_path = args.ref_path
+                    # mm_chunk=int(3E8)
+                    # no_mm_chunk=int(10E6)
+                    # verbose=True
+                    # debug--------------------
                     seq_args = (alignment_path,base_name,sms,seq,
                                 merge_rg,args.sub,trks,feats,fltr_params,
                                 w,w_b,chunk,int(1E9),tile,True,bins,
