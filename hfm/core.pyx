@@ -77,8 +77,8 @@ def edit_dist_str(str s1, str s2, list w=[1,1,1]):
 @cython.wraparound(False)
 def load_reads_all_tracks(str alignment_path, dict sms, str seq, int start, int end,
                           select=['alternate','orient_same','orient_out','orient_um','orient_chr','splice',
-                                  'right_clipped','left_clipped','big_del','deletion','insertion','substitution','fwd_rev_diff',
-                                  'total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis',
+                                  'clipped','right_clipped','left_clipped','big_del','deletion','insertion','substitution',
+                                  'fwd_rev_diff','total','primary','proper_pair','discordant','mapq','mapq_pp','mapq_dis',
                                   'tlen_pp','tlen_dis','tlen_pp_rd','tlen_dis_rd','RD','GC','MD',
                                   'left_smap_same','left_smap_diff','right_smap_same','right_smap_diff'],
                           bint merge_rg=True, bint dna=False, bint exact_sub=False,
