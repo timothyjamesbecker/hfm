@@ -1,7 +1,12 @@
 [![Build Status](https://api.travis-ci.org/timothyjamesbecker/hfm.svg)](https://travis-ci.com/timothyjamesbecker/hfm) ![GitHub All Releases](https://img.shields.io/github/downloads/timothyjamesbecker/hfm/total.svg) [![DOI](https://zenodo.org/badge/192426986.svg)](https://zenodo.org/badge/latestdoi/192426986) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)<br>
 ![Alt text](images/logo.png?raw=true "hfm")
 ### A Hierarchical Feature Moment/Spectrum/Transition Framework for Analyzing and Visualizing Large Cohort Omic Data<br>
-Copyright (C) 2019 Timothy James Becker<br>
+Copyright (C) 2019-2020 Timothy James Becker<br>
+Citations:
+```
+Becker, T. and Shin, DG.(2020) ‘Efficient methods for hierarchical multi-omic feature extraction and
+visualization’, Int. J. Data Mining and Bioinformatics Vol 23, No. 4, pp 285-298.
+```
 ```bash
 T. J. Becker and D. Shin, "HFM: Hierarchical Feature Moment Extraction for Multi-Omic Data Visualization,"
 2019 IEEE International Conference on Bioinformatics and Biomedicine (BIBM), San Diego, CA, USA, 2019, pp. 1970-1976.
