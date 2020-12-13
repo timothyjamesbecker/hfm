@@ -1,4 +1,4 @@
-var rest_host  = 'http://localhost:8080';
+var rest_host  = 'http://margo.local:8080';
 var samples = null,
     sample_names = null,
     track_names = null,
