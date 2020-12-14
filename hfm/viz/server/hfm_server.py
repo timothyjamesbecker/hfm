@@ -316,4 +316,4 @@ app.router.add_get('/sm/{sm}/gene/{gene}/tiles/{tiles}/flank/{flank}/axis/{axis}
 app.router.add_get('/sm/{sm}/seq/{seq}/start/{start}/end/{end}/tiles/{tiles}/flank/{flank}/axis/{axis}',sm_seq_start_end_tiles_flank_h)
 app.router.add_get('/sm/{sm}/trk/{trk}/seq/{seq}/start/{start}/end/{end}/tiles/{tiles}/flank/{flank}/axis/{axis}',sm_trk_seq_start_end_tiles_flank_h)
 app.router.add_static('/', path='../client/', name='client')
-web.run_app(app, host='margo.local', port=port)
+web.run_app(app, host='localhost', port=port)
