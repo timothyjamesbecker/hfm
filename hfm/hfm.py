@@ -142,7 +142,7 @@ def rename_sample(hdf5_in,hdf5_out,sm):
 
 #given a bunch of hdf5s done in ||, merge into one
 #may have to midfiy for multi window version...
-def merge_seqs(hdf5_dir, hdf5_out):
+def merge_seqs(hdf5_dir, hdf5_out, seqs='all'):
     hdf5_files = glob.glob(hdf5_dir+'/*.hdf5')
     print('merging the following files: %s'%hdf5_files)
     out_f = File(hdf5_out,'a')
@@ -153,12 +153,13 @@ def merge_seqs(hdf5_dir, hdf5_out):
             print('reading sample %s'%sample)
             for rg in in_f[sample]:
                 for seq in in_f[sample][rg]:
-                    for track in in_f[sample][rg][seq]:
-                        for feature in in_f[sample][rg][seq][track]:
-                            g_path = '/'.join([sample,rg,seq,track,feature]) #/sample/rg/seq/track: features...
-                            g_id = out_f.require_group('/'.join([sample,rg,seq,track]))
-                            print('copying %s file\n\tg_path=%s'%(hdf5_file,g_path))
-                            in_f.copy(g_path,g_id,name=feature)
+                    if seqs=='all' or seq in seqs:
+                        for track in in_f[sample][rg][seq]:
+                            for feature in in_f[sample][rg][seq][track]:
+                                g_path = '/'.join([sample,rg,seq,track,feature]) #/sample/rg/seq/track: features...
+                                g_id = out_f.require_group('/'.join([sample,rg,seq,track]))
+                                print('copying %s file\n\tg_path=%s'%(hdf5_file,g_path))
+                                in_f.copy(g_path,g_id,name=feature)
         in_f.close()
     out_f.close()
     return True
