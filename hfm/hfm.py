@@ -141,7 +141,7 @@ def rename_sample(hdf5_in,hdf5_out,sm):
     return True
 
 #given a bunch of hdf5s done in ||, merge into one
-#may have to midfiy for multi window version...
+#may have to midfiy for multi window version...gmail
 def merge_seqs(hdf5_dir, hdf5_out, samples = 'all', seqs='all'):
     hdf5_files = glob.glob(hdf5_dir+'/*.hdf5')
     print('merging the following files: %s'%hdf5_files)
