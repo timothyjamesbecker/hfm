@@ -95,8 +95,12 @@ if args.cpus is not None:     cpus = args.cpus
 else:                         cpus = 1
 if args.no_merge_rg:          merge_rg = False
 else:                         merge_rg = True
-if args.no_mem_map:           mem_map  = None
-else:                         mem_map  = hdf5_path+'/seqs/'
+if args.no_mem_map:
+    mem_map  = None
+    trks  = ['total','proper_pair','discordant','MD','big_del','deletion','insertion','substitution','fwd_rev_diff',
+             'tlen_pp', 'tlen_dis' ,'right_clipped','left_clipped','orient_same','orient_out','orient_um','orient_chr']
+else:
+    mem_map  = hdf5_path+'/seqs/'
 if args.window is not None:   w     = args.window
 else:                         w     = 100
 if args.branch is not None:   w_b   = args.branch
