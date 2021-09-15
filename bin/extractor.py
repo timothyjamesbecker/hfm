@@ -97,8 +97,8 @@ if args.no_merge_rg:          merge_rg = False
 else:                         merge_rg = True
 if args.no_mem_map:
     mem_map  = None
-    trks  = ['total','proper_pair','discordant','MD','big_del','deletion','insertion','substitution','fwd_rev_diff',
-             'tlen_pp', 'tlen_dis' ,'right_clipped','left_clipped','orient_same','orient_out','orient_um','orient_chr']
+    trks  = ['MD','discordant','big_del','deletion','insertion','substitution','fwd_rev_diff',
+             'tlen_pp', 'tlen_dis' ,'right_clipped','left_clipped','orient_same','orient_out','orient_um']
 else:
     mem_map  = hdf5_path+'/seqs/'
 if args.window is not None:   w     = args.window
@@ -106,7 +106,7 @@ else:                         w     = 100
 if args.branch is not None:   w_b   = args.branch
 else:                         w_b   = 10
 if args.chunk is not None:    chunk = int(args.chunk)
-else:                         chunk = int(1E9)
+else:                         chunk = int(10E6)
 if args.min_smapq is not None:min_smapq = args.min_smapq
 else:                         min_smapq = 20
 if args.slide is not None:    tile  = not args.slide
